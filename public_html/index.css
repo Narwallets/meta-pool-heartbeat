@@ -1,0 +1,43 @@
+html, body, input {
+    font-family: "Avant Garde","Century Gothic","AppleGothic", Candara, Tahoma, sans-serif;
+    font-size:15px;
+}
+
+body {
+    padding: 20px;
+}
+
+.top-info {
+    font-size: 18px;
+    padding: 4px;
+}
+
+nav {
+    display: flex;
+    border-bottom: 1px solid gray;
+    border-top: 1px solid gray;
+    padding: 4px;
+    text-align: center;
+}
+
+nav a {
+    width: 400px;
+}
+
+.progress {
+    border: 1px solid black;
+    display: flex;
+    border-radius:6px;
+}
+.elapsed,.remaining {
+    border-radius:6px;
+    padding: 4px;
+    text-align:center;
+}
+.elapsed {
+    background: #cdeccd;
+    border-right: 1px solid green;
+}
+.remaining {
+    background: #ffffc5;
+}

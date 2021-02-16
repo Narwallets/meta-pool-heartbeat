@@ -1,0 +1,15 @@
+C:\Users\ltato\source\repos\meta-pool-heartbeat
+validators.epoch_start_height 36683113
+estimated epoch duration in hours: 12
+Epoch started: Tue Feb 16 2021 02:35:22 GMT-0300 (hora estándar de Argentina)  =>  8.1 hs ago
+Epoch ends: Mon May 12 6949 10:43:45 GMT-0300 (hora estándar de Argentina)  => in  3.9 hs
+2021-02-16T13:43:44.301Z
+nodejs version: v14.11.0
+wwwRoot: C:\Users\ltato\source\repos\meta-pool-heartbeat\public_html
+Bare Web Server listening on http://localhost:7001
+--------------------------------------------------------------------------------
+Tue Feb 16 2021 10:43:44 GMT-0300 (hora estándar de Argentina)
+BEAT 1
+-------------------------------
+env_epoch_height:271
+{"total_available":"5210000000000000000000000000","total_for_staking":"4760000000000000000000000000","total_actually_staked":"0","total_stake_shares":"4760000000000000000000000000","total_unstaked_and_waiting":"0","total_actually_unstaked_and_retrieved":"0","total_meta":"0","accumulated_staked_rewards":"0","nslp_liquidity":"5000000000000000000000000000","nslp_current_discount_basis_points":500,"accounts_count":"4","staking_pools_count":4}

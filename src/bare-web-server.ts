@@ -9,8 +9,8 @@
 
 //Dependencies
 //------------
-var path = require('path');
-var fs = require('fs');
+import * as path from 'path';
+import * as  fs from 'fs';
 import * as  url from 'url';
 import * as http from 'http';
 import { FullAccessPermission } from './near-api/transaction';

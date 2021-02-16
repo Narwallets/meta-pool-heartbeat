@@ -181,20 +181,27 @@ export async function broadcast_tx_commit_actions(actions: TX.Action[], signerId
 
     if (result.status && result.status.Failure) {
         console.error(JSON.stringify(result))
-        console.error(result)
+        console.error(getLogsAndErrorsFromReceipts(result))
         throw Error(formatJSONErr(result.status.Failure))
     }
 
-    if (result.status && result.status.SuccessValue) {
-        const sv = naclUtil.encodeUTF8(naclUtil.decodeBase64(result.status.SuccessValue))
-        console.log("result.status.SuccessValue:", sv)
-        if (sv == "false") {
-            console.error(JSON.stringify(result))
-            throw Error(getLogsAndErrorsFromReceipts(result))
-        }
+    if (result.status && result.status.SuccessValue=="") { //returned "void"
+        return undefined; //void
     }
 
-    return result
+    if (result.status && result.status.SuccessValue) { //some json result value, can by a string|true/false|a number
+        const sv = naclUtil.encodeUTF8(naclUtil.decodeBase64(result.status.SuccessValue))
+        //console.log("result.status.SuccessValue:", sv)
+        return JSON.parse(sv)
+        // if (sv == "false") { //bool functions returning false does not mean an error
+        //     console.error(JSON.stringify(result))
+        //     throw Error()
+        // }
+    }
+
+    console.error(JSON.stringify(result))
+    throw Error("!result.status Failure or SuccessValue")    
+    //return result
 }
 
 //-------------------------------

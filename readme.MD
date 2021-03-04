@@ -1,4 +1,4 @@
-# meta-pool-adapter
+# meta-pool-heartbeat
 
 The meta-pool heartbeat is a server process functioning as heart-beat for the meta-pool contract in the NEAR blockchain
 

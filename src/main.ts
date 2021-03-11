@@ -20,7 +20,7 @@ const SECONDS = 1000
 const MINUTES = 60 * SECONDS
 const HOURS = 60 * MINUTES
 
-const MONITORING_PORT = 7001
+const MONITORING_PORT = 7000
 
 const hostname = os.hostname()
 const prodMode = false
@@ -452,7 +452,7 @@ async function main() {
   //-----------------
   //We start a barebones minimal web server to monitor meta-pool-heartbeat stats
   //When a request arrives, it will call appHandler(urlParts, request, response)
-  server = new BareWebServer('public_html', appHandler, MONITORING_PORT)
+  server = new BareWebServer('../public_html', appHandler, MONITORING_PORT)
   server.start()
 
   globalPersistentData = loadJSON()

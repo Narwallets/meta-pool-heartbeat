@@ -99,6 +99,12 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
           </table>
 
           <table>
+            <tr><td>env::epoch_height</td><td>${env_epoch_height}<tr><td>
+            <tr><td>Epoch start height </td><td>${epoch.start_height}<tr><td>
+            <tr><td>last_block_height seen</td><td>${near.lastBlockHeightSeen()}<tr><td>
+            <tr><td>Epoch blocks elapsed </td><td>${near.lastBlockHeightSeen() - epoch.start_height}<tr><td>
+            <tr><td>Epoch advance </td><td>${Math.round((near.lastBlockHeightSeen() - epoch.start_height)/epoch.length*100)}%<tr><td>
+            
             <tr><td>Epoch started</td><td>${epoch.init_dtm.toString()} => ${hoursFromStart}hs ago</td></tr>
             <tr><td>Epoch ends</td><td>${epoch.ends_dtm.toString()} => in ${hoursToEnd}hs<tr><td>
           </table>
@@ -157,6 +163,8 @@ let server: BareWebServer;
 
 let metaPool: MetaPool;
 
+let env_epoch_height: string="";
+
 let validators: any;
 let chainStatus: any;
 let genesisConfig: any;
@@ -180,7 +188,7 @@ class EpochInfo {
     const elapsed_ms = this.duration_ms * elapsed_proportion;
     const last_block_time = last_block_dtm.getTime();
     this.init_dtm = new Date(last_block_time - elapsed_ms)
-    this.ends_dtm = new Date(last_block_time + this.duration_ms * HOURS)
+    this.ends_dtm = new Date(last_block_time - elapsed_ms + this.duration_ms)
   }
 
   proportion(blockNum: number) {
@@ -286,7 +294,7 @@ async function beat() {
   console.log(new Date().toString());
   console.log(`BEAT ${TotalCalls.beats} (${globalPersistentData.beatCount})`);
 
-  let env_epoch_height: string = await metaPool.get_env_epoch_height();
+  env_epoch_height = await metaPool.get_env_epoch_height();
   console.log(`-------------------------------`)
   console.log(`env_epoch_height:${env_epoch_height}`)
 

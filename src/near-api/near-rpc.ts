@@ -14,10 +14,16 @@ import BN = require('bn.js');
 //---------------------------
 
 //--helper fn
-let recentBlockHash: Uint8Array;
-export function getRecentBlockHash(): Uint8Array {
-    return recentBlockHash
+let last_block_hash: Uint8Array;
+export function lastBlockHashSeen(): Uint8Array {
+    return last_block_hash
 }
+
+let last_block_height: number;
+export function lastBlockHeightSeen(): number {
+    return last_block_height
+}
+
 
 //--helper fn
 export function bufferToHex(buffer: any) {
@@ -109,6 +115,7 @@ export function viewRaw(contractId: string, method: string, params?: any): Promi
 }
 export async function view(contractId: string, method: string, params?: any): Promise<any> {
     const data = await viewRaw(contractId, method, params);
+    if (data && data.block_height) last_block_height = data.block_height;
     return decodeJsonFromResult(data.result)
 }
 
@@ -150,7 +157,8 @@ export async function broadcast_tx_commit_actions(actions: TX.Action[], signerId
     // converts a recent block hash into an array of bytes 
     // this hash was retrieved earlier when creating the accessKey (Line 26)
     // this is required to prove the tx was recently constructed (within 24hrs)
-    recentBlockHash = base_decode(accessKey.block_hash);
+    last_block_hash = base_decode(accessKey.block_hash);
+    last_block_height=accessKey.block_height;
 
     // each transaction requires a unique number or nonce
     // this is created by taking the current nonce and incrementing it
@@ -162,7 +170,7 @@ export async function broadcast_tx_commit_actions(actions: TX.Action[], signerId
         receiver,
         nonce,
         actions,
-        recentBlockHash
+        last_block_hash
     )
 
     const serializedTx = serialize(TX.SCHEMA, transaction);
@@ -258,7 +266,7 @@ export function call(
     attachedAmount: number = 0): Promise<any> {
 
     return broadcast_tx_commit_actions(
-        [TX.functionCall(method, params, ONE_TGAS.muln(TGas), ONE_NEAR.muln(attachedAmount))],
+        [TX.functionCall(method, params, new BN(TGas.toString() + "0".repeat(12)), new BN(ntoy(attachedAmount)))],
         sender, contractId, privateKey)
 }
 

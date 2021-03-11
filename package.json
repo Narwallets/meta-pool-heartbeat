@@ -4,7 +4,7 @@
   "description": "narwallet's meta-staking-pool hearbeat service",
   "scripts": {
     "build": "tsc -b -verbose",
-    "test": "node dist/main.js test",
+    "test": "cd dist && node main.js test",
     "test-log": "node dist/main.js test >>main.log",
     "test-client-1": "node dist/test/quote-make-request.js",
     "test-client-2": "node dist/test/volume-make-request.js",

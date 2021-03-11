@@ -13,6 +13,7 @@ import * as network from './near-api/network.js';
 import { yton } from './near-api/near-rpc.js';
 
 import { MetaPool } from './contracts/meta-pool.js'
+import { loadJSON, saveJSON } from './util/save-load-JSON.js';
 
 //time in ms
 const SECONDS = 1000
@@ -29,15 +30,18 @@ const OPERATOR_ACCOUNT = "operator." + CONTRACT_ID;
 
 const StarDateTime = new Date()
 let TotalCalls = {
-  beats: 0
+  beats: 0,
+  stake:0,
+  unstake:0,
+  ping:0,
+  distribute_rewards:0,
+  retrieve:0
 }
 
-class RequestResponseErrData {
-  public request_id: string = "";
-  public err: string = "";
-  public data: any = null;
+class PersistentData {
+  public beatCount: number = 0;
 }
-
+let globalPersistentData = new PersistentData()
 
 //------------------------------------------
 function showWho(resp: http.ServerResponse) {
@@ -280,7 +284,7 @@ async function beat() {
   TotalCalls.beats++;
   console.log("-".repeat(80))
   console.log(new Date().toString());
-  console.log("BEAT " + TotalCalls.beats);
+  console.log(`BEAT ${TotalCalls.beats} (${globalPersistentData.beatCount})`);
 
   let env_epoch_height: string = await metaPool.get_env_epoch_height();
   console.log(`-------------------------------`)
@@ -304,6 +308,7 @@ async function beat() {
     //loop staking
     for (let i = 0; i < 50; i++) {
       console.log("CALL distribute_staking")
+      TotalCalls.stake++;
       try {
         let result = await metaPool.call("distribute_staking", {});
         console.log("more Staking to do? ", result);
@@ -317,6 +322,7 @@ async function beat() {
     //loop unstaking 
     for (let i = 0; i < 50; i++) {
       console.log("CALL distribute_unstaking")
+      TotalCalls.unstake++;
       try {
         let result = await metaPool.call("distribute_unstaking", {});
         console.log("more Unstaking to do? ", result);
@@ -340,11 +346,13 @@ async function beat() {
         //ping on the pool so it calculates rewards
         console.log(`about to call PING & DISTRIB on pool[${inx}]:${JSON.stringify(pool)}`)
         console.log(`pool.PING`)
+        TotalCalls.ping++;
         try {
           await near.call(pool.account_id, "ping", {}, OPERATOR_ACCOUNT, credentials.private_key, 200);
           //calculates rewards now in the meta for that pool
           //pub fn distribute_rewards(&mut self, sp_inx: u16) -> void 
           console.log(`meta.DISTR`)
+          TotalCalls.distribute_rewards++;
           await metaPool.call("distribute_rewards", { sp_inx: inx });
           //distribute_rewards es -> void
         }
@@ -361,6 +369,7 @@ async function beat() {
       if (near.yton(pool.unstaked) > 0 && pool.unstaked_requested_epoch_height != "0" && epoch_difference(env_epoch_height, pool.unstaked_requested_epoch_height) >= 0) {
         //ping on the pool so it calculates rewards
         console.log(`about to call RETRIEVE UNSTK FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
+        TotalCalls.retrieve++;
         try {
           let result = await metaPool.call("retrieve_funds_from_a_pool", { inx: inx });
           console.log(`RESULT:${yton(result)}N`)
@@ -372,6 +381,9 @@ async function beat() {
       }
     }
   }
+
+  globalPersistentData.beatCount++;
+  saveJSON(globalPersistentData);
 
 }
 
@@ -442,6 +454,9 @@ async function main() {
   //When a request arrives, it will call appHandler(urlParts, request, response)
   server = new BareWebServer('public_html', appHandler, MONITORING_PORT)
   server.start()
+
+  globalPersistentData = loadJSON()
+  if (!globalPersistentData.beatCount) globalPersistentData.beatCount=0;
 
   //start loop calling heartbeat 
   heartLoop();

@@ -95,7 +95,7 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
         resp.write(`
           <table>
             <tr><td>Server Started</td><td>${StarDateTime.toString()}</td></tr>    
-            <tr><td>Total Calls</td><td>${util.inspect(TotalCalls)}</td></tr>    
+            <tr><td>Total Calls</td><td>${util.inspect(TotalCalls)}  Acum:${globalPersistentData.beatCount}</td></tr>    
           </table>
 
           <table>

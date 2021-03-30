@@ -15,6 +15,7 @@ import { yton } from './near-api/near-rpc.js';
 import { MetaPool } from './contracts/meta-pool.js'
 import { loadJSON, saveJSON } from './util/save-load-JSON.js';
 import { SmartContract } from './contracts/base-smart-contract.js';
+import { StakingPoolJSONInfo } from './contracts/meta-pool-structs.js';
 
 //time in ms
 const SECONDS = 1000
@@ -308,7 +309,7 @@ function sortCompare(a:PoolInfo, b:PoolInfo) {
   return 1;
 }
 // ---------------
-async function list_validators() {
+async function list_validators(updateList:boolean) {
 
   //make initial pool-list based on current_validators
   const MILLION=BigInt(10**6)
@@ -409,6 +410,35 @@ async function list_validators() {
     sumbp += item.bp||0
   }
   if(sumbp!=10000) throw Error("sum!=100%");
+
+  //end list construction
+  if (!updateList) return;
+
+  //UPDATE contract list
+  console.log("-------------------")
+  console.log("-- UPDATING LIST --")
+  console.log("-------------------")
+
+  const actual:Array<StakingPoolJSONInfo> = await metaPool.get_staking_pool_list();
+  for( let listed of list){
+    if (listed.bp==undefined) continue;
+
+    const foundSp = actual.find(e => e.account_id==listed.name);
+    if (!foundSp ) { //new one
+      console.log(`[new] ${listed.name}, ${listed.bp/100}%`)
+      metaPool.set_staking_pool(listed.name,listed.bp)
+    }
+    else { //found
+      if (foundSp.weight_basis_points!=listed.bp) {
+        //update
+        console.log(`[${foundSp.inx}] change BP, ${foundSp.account_id}  ${foundSp.weight_basis_points/100}% -> ${listed.bp/100}%`)
+        metaPool.set_staking_pool_weight(foundSp.inx,listed.bp);
+      }
+      else {
+        console.log(`[${foundSp.inx}] no change ${foundSp.account_id}  ${foundSp.weight_basis_points/100}%`)
+      }
+    }
+  }
 
 }
 // ---------------
@@ -589,7 +619,7 @@ async function main() {
   }
   //UTILITY MODE, list
   if (process.argv.includes("list")) {
-    await list_validators();
+    await list_validators( process.argv.includes("update") );
     process.exit(1);
   }
 

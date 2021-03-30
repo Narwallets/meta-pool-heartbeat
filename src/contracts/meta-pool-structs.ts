@@ -121,6 +121,7 @@ export type VLoanInfo = {
 }
 
 export type StakingPoolJSONInfo = {
+    inx: number,
     account_id: string,
     weight_basis_points: number,
     staked: string,//u128

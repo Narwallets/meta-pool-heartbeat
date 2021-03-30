@@ -4,6 +4,10 @@ import {ntoy} from '../near-api/near-rpc.js';
 import type {ContractState,StakingPoolJSONInfo,VLoanInfo,GetAccountInfoResult} from "./meta-pool-structs.js"
 import type {ContractInfo} from "./NEP129.js"
 
+function checkInteger(n:number){
+    if (n<0||n>10000||n!=Math.trunc(n)) throw Error("invalid integer: "+n)
+}
+
 export class MetaPool {
 
     constructor(
@@ -21,10 +25,22 @@ export class MetaPool {
     async get_env_epoch_height():Promise<string>{ //U64String
         return this.view("get_env_epoch_height");
     }
- 
+
+    //----------------------------
+    //staking pool list management
     async get_staking_pool_list() :Promise<Array<StakingPoolJSONInfo>>{
         return this.view("get_staking_pool_list");
-      }
+    }
+    async set_staking_pool_weight(inx:number, weight_basis_points:number):Promise<void>{
+        checkInteger(inx);
+        checkInteger(weight_basis_points);
+        return this.view("set_staking_pool_weight",{inx:inx, weight_basis_points:weight_basis_points});
+    }
+    async set_staking_pool(account_id:string, weight_basis_points:number){    
+        checkInteger(weight_basis_points);
+        return this.view("set_staking_pool",{account_id:account_id, weight_basis_points:weight_basis_points});
+    }
+    //----------------------------
           
     /// returns JSON string according to [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
     get_contract_info() : Promise<ContractInfo> {

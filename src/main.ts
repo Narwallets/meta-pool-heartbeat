@@ -14,6 +14,7 @@ import { yton } from './near-api/near-rpc.js';
 
 import { MetaPool } from './contracts/meta-pool.js'
 import { loadJSON, saveJSON } from './util/save-load-JSON.js';
+import { SmartContract } from './contracts/base-smart-contract.js';
 
 //time in ms
 const SECONDS = 1000
@@ -284,6 +285,137 @@ async function rebuild_stakes() {
   }
 }
 
+// ---------------
+// UTILITY: list validators
+// compose a list of sane validators and some points to compute percentages
+// ---------------
+type PoolInfo = {
+  name: string;
+  slashed: boolean;
+  stake_millions: number,
+  stake: bigint,
+  uptime: number,
+  fee: number,
+  ourStake?: bigint,
+  currentPct?:number;
+  points:number;
+  bp?:number;
+}
+
+//sort validators
+function sortCompare(a:PoolInfo, b:PoolInfo) {
+  if (a.stake > b.stake) return -1;
+  return 1;
+}
+// ---------------
+async function list_validators() {
+
+  //make initial pool-list based on current_validators
+  const MILLION=BigInt(10**6)
+
+  let sumStakes = BigInt(0);
+
+  const initialList:PoolInfo[] = []
+  for (let item of validators.current_validators) {
+
+    const uptime = Math.round(item.num_produced_blocks / item.num_expected_blocks * 100)
+    const stake = BigInt(item.stake)
+
+    //only include uptime>95 && stake>2 MILLION
+    if (uptime>95 && stake > 2n*MILLION ) {
+
+      sumStakes+=stake;
+
+      initialList.push({
+          name: item.account_id,
+          slashed: item.is_slashed,
+          stake_millions: Math.round(yton(item.stake))/1e6,
+          stake: stake,
+          uptime: uptime,
+          fee:10,
+          points:0
+      })
+    }
+
+  }
+
+  initialList.sort(sortCompare);
+
+  let stakingPool = new SmartContract("", OPERATOR_ACCOUNT, credentials.private_key)
+
+  const list:PoolInfo[] = []
+  //query fees to refine the list more
+  for (let item of initialList) {
+    stakingPool.contract_account = item.name;
+    try {
+      const rewardFeeFraction = await stakingPool.view("get_reward_fee_fraction")
+      item.fee = rewardFeeFraction.numerator * 100 / rewardFeeFraction.denominator;
+    }
+    catch(ex){
+      //Validator is not a staking-pool contract
+      console.log(item.name + " did not respond to get_reward_fee_fraction")
+      continue;
+    }
+    
+    try {
+      const ourStake = await stakingPool.view("get_account_total_balance",{account_id:CONTRACT_ID})
+      item.ourStake= BigInt(ourStake )
+    }
+    catch(ex){
+      //Validator is not a staking-pool contract
+      console.log(item.name + " did not respond to get_account_total_balance")
+      continue;
+    }
+
+    const MAX_FEE=10
+    if (item.fee>MAX_FEE){
+      console.log(`${item.name} has a fee>${MAX_FEE}, ${item.fee}`)
+      continue;
+    }
+
+    list.push(item);
+
+  }
+
+  //compute % based on our stake
+  const contractState = await metaPool.get_contract_state();
+  const totalStake = BigInt(contractState.total_actually_staked);
+
+  //use fee & order (stake) to determine points
+  let order=0;
+  let totalPoints = 0 
+  for (let item of list) {
+    item.points = 1000-Number(item.stake*1000n/sumStakes) + 1000-(item.fee*100)
+    totalPoints+=item.points ;
+    if (item.ourStake) item.currentPct = Math.round(Number(item.ourStake/totalStake*10000n))/100;
+    order++;
+  }
+
+  //use points to determine pct
+  let sumbp=0;
+  for (let item of list) {
+    item.bp = Math.round(item.points/totalPoints*10000);
+    sumbp+=item.bp
+  }
+  //mak the sum 100%
+  let lastItem = list[list.length-1]
+  lastItem.bp = 10000-(sumbp-(lastItem.bp||0));
+
+  console.log(list);
+
+  //check sum
+  sumbp=0;
+  for (let item of list) {
+    sumbp += item.bp||0
+  }
+  if(sumbp!=10000) throw Error("sum!=100%");
+
+}
+// ---------------
+// END UTILITY: list validators
+// ---------------
+
+
 //---------------------------------------------------
 //check for pending tasks in the SC and execute them
 //---------------------------------------------------
@@ -454,6 +586,11 @@ async function main() {
   if (process.argv.includes("rebuild")) {
       await rebuild_stakes();
       process.exit(1);
+  }
+  //UTILITY MODE, list
+  if (process.argv.includes("list")) {
+    await list_validators();
+    process.exit(1);
   }
 
   //Start Web Server

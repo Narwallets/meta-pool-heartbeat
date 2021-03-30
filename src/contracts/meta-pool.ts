@@ -1,5 +1,6 @@
 import * as near from '../near-api/near-rpc.js';
 import {ntoy} from '../near-api/near-rpc.js';
+import { SmartContract } from './base-smart-contract.js';
 
 import type {ContractState,StakingPoolJSONInfo,VLoanInfo,GetAccountInfoResult} from "./meta-pool-structs.js"
 import type {ContractInfo} from "./NEP129.js"
@@ -8,19 +9,7 @@ function checkInteger(n:number){
     if (n<0||n>10000||n!=Math.trunc(n)) throw Error("invalid integer: "+n)
 }
 
-export class MetaPool {
-
-    constructor(
-        public contract_account: string,
-        public operator_account: string,
-        public operator_private_key: string,
-    ){}
-    async view(method:string, args?:Record<string,any>){
-        return near.view(this.contract_account,method,args||{});
-    }
-    async call(method:string, args:Record<string,any>,TGas?:number,attachedNEAR?:number){
-        return near.call(this.contract_account,method,args,this.operator_account,this.operator_private_key,TGas||200,attachedNEAR||0);
-    }
+export class MetaPool extends SmartContract {
 
     async get_env_epoch_height():Promise<string>{ //U64String
         return this.view("get_env_epoch_height");
@@ -34,11 +23,14 @@ export class MetaPool {
     async set_staking_pool_weight(inx:number, weight_basis_points:number):Promise<void>{
         checkInteger(inx);
         checkInteger(weight_basis_points);
-        return this.view("set_staking_pool_weight",{inx:inx, weight_basis_points:weight_basis_points});
+        return this.call("set_staking_pool_weight",{inx:inx, weight_basis_points:weight_basis_points});
     }
-    async set_staking_pool(account_id:string, weight_basis_points:number){    
+    async set_staking_pool(account_id:string, weight_basis_points:number):Promise<void>{
         checkInteger(weight_basis_points);
-        return this.view("set_staking_pool",{account_id:account_id, weight_basis_points:weight_basis_points});
+        return this.call("set_staking_pool",{account_id:account_id, weight_basis_points:weight_basis_points});
+    }
+    async sum_staking_pool_list_weight_basis_points():Promise<number>{
+        return this.view("sum_staking_pool_list_weight_basis_points",{});
     }
     //----------------------------
           

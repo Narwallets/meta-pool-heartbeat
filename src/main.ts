@@ -29,6 +29,7 @@ const prodMode = false
 network.setCurrent(prodMode ? "mainnet" : "testnet")
 const CONTRACT_ID = prodMode ? "meta.pool.near" : "meta.pool.testnet"
 const OPERATOR_ACCOUNT = "operator." + CONTRACT_ID;
+const OWNER_ACCOUNT = "lucio." + network.current;
 
 const StarDateTime = new Date()
 let TotalCalls = {
@@ -344,7 +345,7 @@ async function list_validators(updateList:boolean) {
 
   let stakingPool = new SmartContract("", OPERATOR_ACCOUNT, credentials.private_key)
 
-  const list:PoolInfo[] = []
+  const newList:PoolInfo[] = []
   //query fees to refine the list more
   for (let item of initialList) {
     stakingPool.contract_account = item.name;
@@ -374,7 +375,7 @@ async function list_validators(updateList:boolean) {
       continue;
     }
 
-    list.push(item);
+    newList.push(item);
 
   }
 
@@ -385,7 +386,7 @@ async function list_validators(updateList:boolean) {
   //use fee & order (stake) to determine points
   let order=0;
   let totalPoints = 0 
-  for (let item of list) {
+  for (let item of newList) {
     item.points = 1000-Number(item.stake*1000n/sumStakes) + 1000-(item.fee*100)
     totalPoints+=item.points ;
     if (item.ourStake) item.currentPct = Math.round(Number(item.ourStake/totalStake*10000n))/100;
@@ -394,51 +395,75 @@ async function list_validators(updateList:boolean) {
 
   //use points to determine pct
   let sumbp=0;
-  for (let item of list) {
+  for (let item of newList) {
     item.bp = Math.round(item.points/totalPoints*10000);
     sumbp+=item.bp
   }
   //mak the sum 100%
-  let lastItem = list[list.length-1]
+  let lastItem = newList[newList.length-1]
   lastItem.bp = 10000-(sumbp-(lastItem.bp||0));
 
-  console.log(list);
+  console.log(newList);
 
   //check sum
   sumbp=0;
-  for (let item of list) {
+  for (let item of newList) {
     sumbp += item.bp||0
   }
   if(sumbp!=10000) throw Error("sum!=100%");
 
   //end list construction
-  if (!updateList) return;
 
-  //UPDATE contract list
-  console.log("-------------------")
-  console.log("-- UPDATING LIST --")
-  console.log("-------------------")
+  if (updateList) {
 
-  const actual:Array<StakingPoolJSONInfo> = await metaPool.get_staking_pool_list();
-  for( let listed of list){
-    if (listed.bp==undefined) continue;
+      //UPDATE contract list
+      console.log("-------------------")
+      console.log("-- UPDATING LIST --")
+      console.log("-------------------")
 
-    const foundSp = actual.find(e => e.account_id==listed.name);
-    if (!foundSp ) { //new one
-      console.log(`[new] ${listed.name}, ${listed.bp/100}%`)
-      metaPool.set_staking_pool(listed.name,listed.bp)
-    }
-    else { //found
-      if (foundSp.weight_basis_points!=listed.bp) {
-        //update
-        console.log(`[${foundSp.inx}] change BP, ${foundSp.account_id}  ${foundSp.weight_basis_points/100}% -> ${listed.bp/100}%`)
-        metaPool.set_staking_pool_weight(foundSp.inx,listed.bp);
+      getCredentials(OWNER_ACCOUNT);
+      metaPool.signer = credentials.account_id;
+      metaPool.signer_private_key = credentials.private_key;
+
+      const actual:Array<StakingPoolJSONInfo> = await metaPool.get_staking_pool_list();
+      for( let listed of newList){
+        if (listed.bp==undefined) continue;
+
+        const foundSp = actual.find(e => e.account_id==listed.name);
+        if (!foundSp ) { //new one
+          console.log(`[new] ${listed.name}, ${listed.bp/100}%`)
+          await metaPool.set_staking_pool(listed.name,listed.bp)
+        }
+        else { //found
+          if (foundSp.weight_basis_points!=listed.bp) {
+            //update
+            console.log(`[${foundSp.inx}] change BP, ${foundSp.account_id}  ${foundSp.weight_basis_points/100}% -> ${listed.bp/100}%`)
+            await metaPool.set_staking_pool_weight(foundSp.inx,listed.bp);
+          }
+          else {
+            console.log(`[${foundSp.inx}] no change ${foundSp.account_id}  ${foundSp.weight_basis_points/100}%`)
+          }
+        }
       }
-      else {
-        console.log(`[${foundSp.inx}] no change ${foundSp.account_id}  ${foundSp.weight_basis_points/100}%`)
+
+      //set bp=0 for the ones no longer validating or on the list
+      for(let sp of actual){
+        const foundListed = newList.find(e => e.name == sp.account_id);
+        if (!foundListed){
+            //not listed
+            console.log(`[${sp.inx}] not-listed so BP->0, ${sp.account_id}  ${sp.weight_basis_points/100}% -> 0%`)
+            await metaPool.set_staking_pool_weight(sp.inx,0);
+        }
       }
-    }
+
+
   }
+
+  //check sum of bp
+  const checkbp = await metaPool.sum_staking_pool_list_weight_basis_points()
+  console.log(`sum bp = ${checkbp}`)
+  if(checkbp!=10000) throw Error("sum bp expected to be 10000, but it is "+checkbp)
+
 
 }
 // ---------------
@@ -586,16 +611,10 @@ async function heartLoop() {
 
 }
 
-//------------------------------------------------------------------
-// START
-//------------------------------------------------------------------
-async function main() {
 
-  // Get signing credentials
-  //-----------------------
-  console.log(process.cwd())
+function getCredentials(accountId:string){
   const homedir = os.homedir()
-  const CREDENTIALS_FILE = path.join(homedir, ".near-credentials/default/" + OPERATOR_ACCOUNT + ".json")
+  const CREDENTIALS_FILE = path.join(homedir, ".near-credentials/default/" + accountId + ".json")
   try {
     let credentialsString = fs.readFileSync(CREDENTIALS_FILE).toString();
     credentials = JSON.parse(credentialsString)
@@ -605,12 +624,31 @@ async function main() {
   if (!credentials.private_key) {
     console.error("INVALID CREDENTIALS FILE. no priv.key")
   }
+}
+
+//------------------------------------------------------------------
+// START
+//------------------------------------------------------------------
+async function main() {
+
+  // Get signing credentials
+  //-----------------------
+  console.log(process.cwd())
+
+  getCredentials(OPERATOR_ACCOUNT);
 
   //create contract proxy
   metaPool = new MetaPool(CONTRACT_ID, OPERATOR_ACCOUNT, credentials.private_key);
 
   // get global info
   await getGlobalInfo()
+
+  //validate arguments
+  for (const arg of process.argv){
+    if (arg.endsWith("/node")) continue;
+    if (arg.endsWith("/main")) continue;
+    if (!["rebuild","list","update"].includes(arg)) throw Error("invalid argument: "+arg)
+  }
 
   //UTILITY MODE, rebuild stakes
   if (process.argv.includes("rebuild")) {

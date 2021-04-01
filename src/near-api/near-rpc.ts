@@ -122,6 +122,20 @@ export async function view(contractId: string, method: string, params?: any): Pr
 //--------------------
 //---- GENERAL STATUS
 //--------------------
+export type BlockInfo = {
+    header: {
+        height: number
+        timestamp: number;
+        epoch_id: string;
+        next_epoch_id: string;
+    }
+}
+export function latestBlock(): Promise<BlockInfo> {
+    return jsonRpc('block',{finality:"optimistic"}) 
+};
+export function block(blockId:string): Promise<BlockInfo> {
+    return jsonRpc('block', {block_id:blockId})
+};
 export function getStatus(): Promise<any> {
     return jsonRpc('status', [null]) as Promise<any>
 };
@@ -140,8 +154,8 @@ export function getValidators(): Promise<any> {
 
 //-------------------------------
 export function broadcast_tx_commit_signed(signedTransaction: TX.SignedTransaction): Promise<any> {
-    const borshEcoded = signedTransaction.encode();
-    const b64Encoded = Buffer.from(borshEcoded).toString('base64')
+    const borshEncoded = signedTransaction.encode();
+    const b64Encoded = Buffer.from(borshEncoded).toString('base64')
     return jsonRpc('broadcast_tx_commit', [b64Encoded]) as Promise<any>
 };
 

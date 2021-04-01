@@ -56,10 +56,10 @@ export function formatJSONErr(obj: any): any {
     let n = text.indexOf(KEY)
     if (n > 0 && n < text.length - kl - 5) {
         const i = text.indexOf("'", n + kl + 4)
-        const cutted = text.slice(n + kl, i)
-        if (cutted.trim().length > 5) {
+        const cut = text.slice(n + kl, i)
+        if (cut.trim().length > 5) {
             console.error(text.slice(n, i + 80)) //show info in the console before removing extra info
-            text = "panicked at: " + cutted;
+            text = "panicked at: " + cut;
         }
     }
 
@@ -138,7 +138,7 @@ export async function jsonRpcInternal(payload: Record<string, any>): Promise<any
  * @param method jsonRpc method to call
  * @param jsonRpcParams string[] with parameters
  */
-export function jsonRpc(method: string, jsonRpcParams: any[]): Promise<any> {
+export function jsonRpc(method: string, jsonRpcParams: any): Promise<any> {
     const payload = {
         method: method,
         params: jsonRpcParams,

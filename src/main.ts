@@ -25,7 +25,7 @@ const HOURS = 60 * MINUTES
 const MONITORING_PORT = 7000
 
 const hostname = os.hostname()
-const prodMode = true
+const prodMode = false
 network.setCurrent(prodMode ? "mainnet" : "testnet")
 const CONTRACT_ID = prodMode ? "meta.pool.near" : "meta.pool.testnet"
 const OPERATOR_ACCOUNT = "operator." + CONTRACT_ID;
@@ -110,11 +110,11 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
           </table>
 
           <table>
-            <tr><td>env::epoch_height</td><td>${env_epoch_height}<tr><td>
-            <tr><td>Epoch start height </td><td>${epoch.start_height}<tr><td>
-            <tr><td>last_block_height seen</td><td>${near.lastBlockHeightSeen()}<tr><td>
-            <tr><td>Epoch blocks elapsed </td><td>${near.lastBlockHeightSeen() - epoch.start_height}<tr><td>
-            <tr><td>Epoch advance </td><td>${Math.round((near.lastBlockHeightSeen() - epoch.start_height)/epoch.length*100)}%<tr><td>
+            <tr><td>Prev epoch duration</td><td>${asHM(epoch.duration_ms/HOURS)}<tr><td>
+            <tr><td>Epoch start height </td><td>${epoch.startBlock.header.height}<tr><td>
+            <tr><td>last_block_height</td><td>${globalLastBlock.header.height}<tr><td>
+            <tr><td>Epoch blocks elapsed </td><td>${globalLastBlock.header.height - epoch.startBlock.header.height}<tr><td>
+            <tr><td>Epoch advance </td><td>${Math.round((globalLastBlock.header.height - epoch.startBlock.header.height)/epoch.length*100)}%<tr><td>
             
             <tr><td>Epoch started</td><td>${epoch.init_dtm.toString()} => ${asHM(hoursFromStart)} ago</td></tr>
             <tr><td>Epoch ends</td><td>${epoch.ends_dtm.toString()} => in ${asHM(hoursToEnd)}<tr><td>
@@ -176,50 +176,43 @@ let metaPool: MetaPool;
 
 let env_epoch_height: string="";
 
-let validators: any;
 let chainStatus: any;
-let genesisConfig: any;
+//let genesisConfig: any;
 let epoch: EpochInfo;
 
 class EpochInfo {
-  public epochs_per_day: number;
+  public length: number;
   public duration_ms: number;
+  public prev_timestamp: number;
+  public start_timestamp: number;
+  public last_block_timestamp: number;
   public init_dtm: Date;
   public ends_dtm: Date;
   //public data:Record<string,any>; //to store epoch-related data
-  constructor(
-    public length: number,
-    public blocks_per_year: number,
-    public start_height: number,
-    latest_block_height: number,
-    last_block_dtm: Date) {
-    this.epochs_per_day = blocks_per_year / length / 365;
-    this.duration_ms = 24 * HOURS / this.epochs_per_day;
-    const elapsed_proportion = this.proportion(latest_block_height);
-    const elapsed_ms = this.duration_ms * elapsed_proportion;
-    const last_block_time = last_block_dtm.getTime();
-    this.init_dtm = new Date(last_block_time - elapsed_ms)
-    this.ends_dtm = new Date(last_block_time - elapsed_ms + this.duration_ms)
+  constructor(prevBlock: near.BlockInfo, public startBlock:near.BlockInfo, lastBlock:near.BlockInfo) {
+    this.length = startBlock.header.height - prevBlock.header.height;
+    this.prev_timestamp = Math.round(prevBlock.header.timestamp/1e6);
+    this.start_timestamp = Math.round(startBlock.header.timestamp/1e6);
+    this.last_block_timestamp = Math.round(lastBlock.header.timestamp/1e6);
+    this.duration_ms = Math.round(this.start_timestamp-this.prev_timestamp);
+    this.init_dtm = new Date(this.start_timestamp)
+    this.ends_dtm = new Date(this.start_timestamp + this.duration_ms)
   }
 
   proportion(blockNum: number) {
-    return (blockNum - this.start_height) / this.length;
+    return (blockNum - this.startBlock.header.height) / this.length;
   }
 
   block_dtm(blockNum: number): Date {
-    return new Date(this.init_dtm.getTime() + this.duration_ms * this.proportion(blockNum))
-  }
-
-  hours_to_block(blockNum: number): number {
-    return Math.round((this.block_dtm(blockNum).getTime() - this.init_dtm.getTime()) / HOURS * 100) / 100;
+    return new Date(this.start_timestamp + this.duration_ms * this.proportion(blockNum))
   }
 
   hours_from_start(): number {
-    return Math.round((new Date().getTime() - this.init_dtm.getTime()) / HOURS * 100) / 100;
+    return Math.round((new Date().getTime() - this.start_timestamp) / HOURS * 100) / 100;
   }
 
   hours_to_end(): number {
-    return Math.round((this.init_dtm.getTime() + this.duration_ms - new Date().getTime()) / HOURS * 100) / 100;
+    return Math.round((this.start_timestamp + this.duration_ms - new Date().getTime()) / HOURS * 100) / 100;
   }
 }
 
@@ -228,7 +221,7 @@ class EpochInfo {
 //-----------------------
 async function getGlobalInfo() {
 
-  genesisConfig = await near.getGenesisConfig();
+  //genesisConfig = await near.getGenesisConfig();
   //console.log(util.inspect(genesisConfig)); //epoch_length, num_blocks_per_year
 
   await computeCurrentEpoch();
@@ -236,29 +229,14 @@ async function getGlobalInfo() {
 
 async function computeCurrentEpoch() {
 
-  validators = await near.getValidators();
-  //console.log(util.inspect(validators));
-
-  chainStatus = await near.getStatus();
-  // .sync_info.latest_block_height: 36635572,
-  // .sync_info.latest_state_root: 'EJxjn91jSiLRrZx5etR7ePGvDuhEWXxLJQhLmGgdi3zA',
-  // .sync_info.latest_block_time: '2021-02-15T23:25:52.892650145Z',
-  //console.log(util.inspect(status));
-
-  console.log("validators.epoch_start_height", validators.epoch_start_height)
-  //console.log("genesisConfig.epoch_length",genesisConfig.epoch_length)
-  //console.log("genesisConfig.num_blocks_per_year",genesisConfig.num_blocks_per_year)
-  epoch = new EpochInfo(
-    genesisConfig.epoch_length,
-    genesisConfig.num_blocks_per_year,
-    validators.epoch_start_height,
-    chainStatus.sync_info.latest_block_height,
-    new Date(chainStatus.sync_info.latest_block_time)
-  );
+  const lastBlock = await near.latestBlock();
+  const firstBlock = await near.block(lastBlock.header.next_epoch_id); //next_epoch_id looks like "current" epoch_id
+  const prevBlock = await near.block(lastBlock.header.epoch_id); //epoch_id looks like "prev" epoch_id
+  
+  epoch = new EpochInfo(prevBlock,firstBlock, lastBlock);
   console.log("estimated epoch duration in hours:", epoch.duration_ms / HOURS)
-  console.log("Epoch started:", epoch.init_dtm.toString(), " => ", epoch.hours_from_start(), "hs ago")
-  console.log("Epoch ends:", epoch.ends_dtm.toString(), " => in ", epoch.hours_to_end(), "hs")
-
+  console.log("Epoch started:", epoch.init_dtm.toString(), " => ", asHM(epoch.hours_from_start()), "hs ago")
+  console.log("Epoch ends:", epoch.ends_dtm.toString(), " => in ", asHM(epoch.hours_to_end()), "hs")
 }
 
 //utility
@@ -324,6 +302,8 @@ async function list_validators(updateList:boolean) {
   const MILLION=BigInt(10**6)
 
   let sumStakes = BigInt(0);
+
+  let validators = await near.getValidators();
 
   const initialList:PoolInfo[] = []
   for (let item of validators.current_validators) {
@@ -478,6 +458,7 @@ async function list_validators(updateList:boolean) {
 // END UTILITY: list validators
 // ---------------
 
+let globalLastBlock: near.BlockInfo;
 
 //---------------------------------------------------
 //check for pending tasks in the SC and execute them
@@ -489,9 +470,10 @@ async function beat() {
   console.log(new Date().toString());
   console.log(`BEAT ${TotalCalls.beats} (${globalPersistentData.beatCount})`);
 
-  env_epoch_height = await metaPool.get_env_epoch_height();
+  globalLastBlock = await near.latestBlock()
+
   console.log(`-------------------------------`)
-  console.log(`env_epoch_height:${env_epoch_height}`)
+  console.log(`last_block:${globalLastBlock.header.height}`)
 
   //if the epoch ended, compute the new one
   if (new Date().getTime() >= epoch.ends_dtm.getTime()) {
@@ -603,6 +585,7 @@ async function heartLoop() {
     await beat();
   }
   catch (ex) {
+    console.log("ERR", ex.message)
     console.error("ERR", ex.message)
   }
 

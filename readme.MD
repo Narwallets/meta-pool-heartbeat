@@ -24,7 +24,7 @@ This server also exposes an HTTP endpoint (default port 7001) to:
 
 ## Integration Test Instructions
 
-You need to have the server running and processing requests and also you need a user operationg the contract
+You need to have the server running and processing requests and also you need a user operating the contract
 
 * Start `node dist/main`
 

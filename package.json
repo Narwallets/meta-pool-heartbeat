@@ -1,10 +1,10 @@
 {
   "name": "meta-pool-heartbeat",
   "version": "1.0.0",
-  "description": "narwallet's meta-staking-pool hearbeat service",
+  "description": "narwallets meta-staking-pool heart beat service",
   "scripts": {
     "build": "tsc -b -verbose",
-    "test": "cd dist && node main.js test",
+    "test": "npm run build && cd dist && node main.js test",
     "test-log": "node dist/main.js test >>main.log",
     "test-client-1": "node dist/test/quote-make-request.js",
     "test-client-2": "node dist/test/volume-make-request.js",
@@ -14,9 +14,8 @@
     "near",
     "nearprotocol",
     "blockchain",
-    "dia",
-    "oracles",
-    "diadata"
+    "meta-pool",
+    "staking"
   ],
   "author": "Narwallets.com",
   "license": "ISC",

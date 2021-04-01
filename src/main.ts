@@ -22,6 +22,8 @@ const SECONDS = 1000
 const MINUTES = 60 * SECONDS
 const HOURS = 60 * MINUTES
 
+const NUM_EPOCHS_TO_UNLOCK=4
+
 const MONITORING_PORT = 7000
 
 const hostname = os.hostname()
@@ -111,12 +113,12 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
 
           <table>
             <tr><td>Prev epoch duration</td><td>${asHM(epoch.duration_ms/HOURS)}<tr><td>
-            <tr><td>Epoch start height </td><td>${epoch.startBlock.header.height}<tr><td>
+            <tr><td>Epoch start height </td><td>${epoch.start_block_height}<tr><td>
             <tr><td>last_block_height</td><td>${globalLastBlock.header.height}<tr><td>
-            <tr><td>Epoch blocks elapsed </td><td>${globalLastBlock.header.height - epoch.startBlock.header.height}<tr><td>
-            <tr><td>Epoch advance </td><td>${Math.round((globalLastBlock.header.height - epoch.startBlock.header.height)/epoch.length*100)}%<tr><td>
+            <tr><td>Epoch blocks elapsed </td><td>${globalLastBlock.header.height - epoch.start_block_height}<tr><td>
+            <tr><td>Epoch advance </td><td>${Math.round((globalLastBlock.header.height - epoch.start_block_height)/epoch.length*100)}%<tr><td>
             
-            <tr><td>Epoch started</td><td>${epoch.init_dtm.toString()} => ${asHM(hoursFromStart)} ago</td></tr>
+            <tr><td>Epoch started</td><td>${epoch.start_dtm.toString()} => ${asHM(hoursFromStart)} ago</td></tr>
             <tr><td>Epoch ends</td><td>${epoch.ends_dtm.toString()} => in ${asHM(hoursToEnd)}<tr><td>
           </table>
 
@@ -174,8 +176,6 @@ let server: BareWebServer;
 
 let metaPool: MetaPool;
 
-let env_epoch_height: string="";
-
 let chainStatus: any;
 //let genesisConfig: any;
 let epoch: EpochInfo;
@@ -184,23 +184,61 @@ class EpochInfo {
   public length: number;
   public duration_ms: number;
   public prev_timestamp: number;
+  public start_block_height: number;
   public start_timestamp: number;
   public last_block_timestamp: number;
-  public init_dtm: Date;
+  public start_dtm: Date;
+  public advance: number; //0-1
+  public duration_till_now_ms: number;
   public ends_dtm: Date;
   //public data:Record<string,any>; //to store epoch-related data
-  constructor(prevBlock: near.BlockInfo, public startBlock:near.BlockInfo, lastBlock:near.BlockInfo) {
-    this.length = startBlock.header.height - prevBlock.header.height;
-    this.prev_timestamp = Math.round(prevBlock.header.timestamp/1e6);
-    this.start_timestamp = Math.round(startBlock.header.timestamp/1e6);
-    this.last_block_timestamp = Math.round(lastBlock.header.timestamp/1e6);
-    this.duration_ms = Math.round(this.start_timestamp-this.prev_timestamp);
-    this.init_dtm = new Date(this.start_timestamp)
+  constructor(prevBlock: near.BlockInfo, startBlock:near.BlockInfo, lastBlock:near.BlockInfo) {
+    
+    this.prev_timestamp = Math.round(prevBlock.header.timestamp/1e6)
+    this.start_block_height = startBlock.header.height
+    this.start_timestamp = Math.round(startBlock.header.timestamp/1e6)
+    this.last_block_timestamp = Math.round(lastBlock.header.timestamp/1e6)
+
+    if (this.start_timestamp< new Date().getTime()-48*HOURS) { //genesis or hard-fork
+        this.start_timestamp =  new Date().getTime()-6*HOURS
+    }
+
+    let noPrevBloc = startBlock.header.height == prevBlock.header.height;
+    this.length = startBlock.header.height - prevBlock.header.height
+    if (this.length==0) { //!prevBlock, genesis or hard-fork
+      this.length=41000;
+      this.duration_ms=12*HOURS;
+      this.advance = Math.round(Number(((BigInt(lastBlock.header.height) - BigInt(this.start_block_height)) * BigInt(1000000)) / BigInt(this.length)))/1000000;
+      this.start_timestamp = this.last_block_timestamp - this.duration_ms * this.advance
+      this.prev_timestamp = this.start_timestamp-this.duration_ms
+    }
+    else {
+      this.length = startBlock.header.height - prevBlock.header.height
+      this.duration_till_now_ms = this.last_block_timestamp - this.start_timestamp;
+      this.advance = this.update(lastBlock);
+      this.prev_timestamp = Math.round(prevBlock.header.timestamp/1e6)
+      this.duration_ms = Math.round(this.start_timestamp-this.prev_timestamp)
+    }
+
+    this.duration_till_now_ms = this.last_block_timestamp - new Date().getTime()
+    this.start_dtm = new Date(this.start_timestamp)
     this.ends_dtm = new Date(this.start_timestamp + this.duration_ms)
+ 
+  }
+
+  update(lastBlock:near.BlockInfo):number{
+    this.last_block_timestamp = Math.round(lastBlock.header.timestamp/1e6)
+    const duration_till_now_ms = this.last_block_timestamp - this.start_dtm.getTime()
+    const advance = Math.round(Number(((BigInt(lastBlock.header.height) - BigInt(this.start_block_height)) * BigInt(1000000)) / BigInt(this.length)))/1000000;
+    if (advance>0.5){
+      this.ends_dtm = new Date(this.start_timestamp + duration_till_now_ms + duration_till_now_ms*(1-advance))
+    }
+    this.duration_till_now_ms = duration_till_now_ms;
+    return advance;
   }
 
   proportion(blockNum: number) {
-    return (blockNum - this.startBlock.header.height) / this.length;
+    return (blockNum - this.start_block_height) / this.length;
   }
 
   block_dtm(blockNum: number): Date {
@@ -231,27 +269,20 @@ async function computeCurrentEpoch() {
 
   const lastBlock = await near.latestBlock();
   const firstBlock = await near.block(lastBlock.header.next_epoch_id); //next_epoch_id looks like "current" epoch_id
-  const prevBlock = await near.block(lastBlock.header.epoch_id); //epoch_id looks like "prev" epoch_id
+  const prevBlock = 
+   (lastBlock.header.epoch_id='11111111111111111111111111111111')? //hard-fork, no prev-epoch
+      firstBlock : await near.block(lastBlock.header.epoch_id); //epoch_id looks like "prev" epoch_id
+  
   
   epoch = new EpochInfo(prevBlock,firstBlock, lastBlock);
   console.log("estimated epoch duration in hours:", epoch.duration_ms / HOURS)
-  console.log("Epoch started:", epoch.init_dtm.toString(), " => ", asHM(epoch.hours_from_start()), "hs ago")
+  console.log("Epoch started:", epoch.start_dtm.toString(), " => ", asHM(epoch.hours_from_start()), "hs ago")
   console.log("Epoch ends:", epoch.ends_dtm.toString(), " => in ", asHM(epoch.hours_to_end()), "hs")
 }
 
 //utility
 async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function epoch_difference(epochA: string, epochB: string): number {
-  //string massage u64 to subtract within 1e15 js number precision
-  epochA = epochA.padStart(20, "0")
-  epochB = epochB.padStart(20, "0")
-  let i = 0;
-  for (; i < 20 && epochA[i] != epochB[i]; i++);
-  if (i <= 5) return 1e15; //overflow
-  return Number(epochA.slice(i)) - Number(epochB.slice(i))
 }
 
 //
@@ -471,6 +502,7 @@ async function beat() {
   console.log(`BEAT ${TotalCalls.beats} (${globalPersistentData.beatCount})`);
 
   globalLastBlock = await near.latestBlock()
+  epoch.update(globalLastBlock);
 
   console.log(`-------------------------------`)
   console.log(`last_block:${globalLastBlock.header.height}`)
@@ -485,6 +517,8 @@ async function beat() {
 
   const contract_state = await metaPool.get_contract_state();
   console.log(JSON.stringify(contract_state))
+  console.log("delta stake:",yton(contract_state.total_for_staking)-yton(contract_state.total_for_staking));
+  console.log("total_actually_unstaked_and_retrieved:",yton(contract_state.total_actually_unstaked_and_retrieved));
 
   // STAKE or UNSTAKE
   //if the epoch is ending, stake-unstake
@@ -520,14 +554,13 @@ async function beat() {
     }
   }
 
-
   // COMPUTE REWARDS
   //if the epoch is recently started -- ping the pools so they compute rewards and do the same in the meta-pool
   if ((epoch.hours_from_start() > 0.5 && epoch.hours_from_start() < 1.5) || debugMode) {
     let pools = await metaPool.get_staking_pool_list();
     for (let inx = 0; inx < pools.length; inx++) {
       const pool = pools[inx];
-      if ((near.yton(pool.staked) > 0 || near.yton(pool.unstaked) > 0) && pool.last_asked_rewards_epoch_height != env_epoch_height) {
+      if ((near.yton(pool.staked) > 0 || near.yton(pool.unstaked) > 0) && pool.last_asked_rewards_epoch_height != contract_state.env_epoch_height) {
         //ping on the pool so it calculates rewards
         console.log(`about to call PING & DISTRIBUTE on pool[${inx}]:${JSON.stringify(pool)}`)
         console.log(`pool.PING`)
@@ -551,9 +584,12 @@ async function beat() {
     // RETRIEVE UNSTAKED FUNDS
     for (let inx = 0; inx < pools.length; inx++) {
       const pool = pools[inx];
-      if (near.yton(pool.unstaked) > 0 && pool.unstaked_requested_epoch_height != "0" && epoch_difference(env_epoch_height, pool.unstaked_requested_epoch_height) >= 0) {
-        //ping on the pool so it calculates rewards
-        console.log(`about to call RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
+      if (near.yton(pool.unstaked) > 0 && pool.unstaked_requested_epoch_height != "0" 
+            && BigInt(contract_state.env_epoch_height)>=BigInt(pool.unstaked_requested_epoch_height)+BigInt(NUM_EPOCHS_TO_UNLOCK)) 
+        {
+
+        //try RETRIEVE UNSTAKED FUNDS
+        console.log(`about to try RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
         TotalCalls.retrieve++;
         try {
           let result = await metaPool.call("retrieve_funds_from_a_pool", { inx: inx });

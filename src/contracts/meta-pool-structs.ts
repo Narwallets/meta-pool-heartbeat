@@ -1,3 +1,4 @@
+type U64String = string;
 type U128String = string;
 
 //struct returned from get_account_info
@@ -45,6 +46,7 @@ export type GetAccountInfoResult = {
 //JSON compatible struct returned from get_contract_state
 export type ContractState = {
 
+    env_epoch_height: U64String,
     /// This amount increments with deposits and decrements with for_staking
     /// increments with complete_unstake and decrements with user withdrawals from the contract
     /// withdrawals from the pools can include rewards
@@ -55,35 +57,32 @@ export type ContractState = {
     /// not necessarily what's actually staked since staking can be done in batches
     total_for_staking: U128String,
 
-    /// The total amount of tokens selected for unstaking by the users 
-    /// not necessarily what's actually unstaked since unstaking can be done in batches
-    total_for_unstaking: U128String,
-
-    /// the staking pools will add rewards to the staked amount on each epoch
-    /// here we store the accumulated amount only for stats purposes. This amount can only grow
-    accumulated_staked_rewards: string, 
-
     /// we remember how much we sent to the pools, so it's easy to compute staking rewards
     /// total_actually_staked: Amount actually sent to the staking pools and staked - NOT including rewards
     /// During distribute(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets staked in 100kN batches
     total_actually_staked: U128String, 
 
-    /// The total amount of tokens actually unstaked (the tokens are in the staking pools)
-    /// During distribute(), If !staking_paused && total_for_unstaking<total_actually_unstaked, then the difference gets unstaked in 100kN batches
-    total_actually_unstaked: U128String,
-
-    /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
-    /// During distribute(), If sp.pending_withdrawal && sp.epoch_for_withdraw == env::epoch_height then all funds are retrieved from the sp
-    /// When the funds are actually retrieved, total_actually_unstaked is decremented
-    total_actually_unstaked_and_retrieved: U128String,
-
     // how many "shares" were minted. Every time someone "stakes" he "buys pool shares" with the staked amount
     // the share price is computed so if he "sells" the shares on that moment he recovers the same near amount
     // staking produces rewards, so share_price = total_for_staking/total_shares
     // when someone "unstakes" she "burns" X shares at current price to recoup Y near
-    total_stake_shares: string,
+    total_stake_shares: U128String, 
 
+    /// The total amount of tokens actually unstaked (the tokens are in the staking pools)
+    /// During distribute(), If !staking_paused && total_for_unstaking<total_actually_unstaked, then the difference gets unstaked in 100kN batches
+    total_unstaked_and_waiting: U128String, 
+
+    /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
+    /// During distribute(), If sp.pending_withdrawal && sp.epoch_for_withdraw == env::epoch_height then all funds are retrieved from the sp
+    /// When the funds are actually withdraw by the users, total_actually_unstaked is decremented
+    total_actually_unstaked_and_retrieved: U128String, 
+
+    /// total meta minted
     total_meta : U128String,
+
+    /// the staking pools will add rewards to the staked amount on each epoch
+    /// here we store the accumulated amount only for stats purposes. This amount can only grow
+    accumulated_staked_rewards: U128String, 
 
     nslp_liquidity : U128String,
     nslp_stnear_balance : U128String,
@@ -96,7 +95,7 @@ export type ContractState = {
     accounts_count: string,//U64,
 
     //count of pools to diversify in
-    staking_pools_count: string, //U64, 
+    staking_pools_count: number, //u16, 
 }
 
 export type VLoanInfo = {

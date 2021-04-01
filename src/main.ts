@@ -25,7 +25,7 @@ const HOURS = 60 * MINUTES
 const MONITORING_PORT = 7000
 
 const hostname = os.hostname()
-const prodMode = false
+const prodMode = true
 network.setCurrent(prodMode ? "mainnet" : "testnet")
 const CONTRACT_ID = prodMode ? "meta.pool.near" : "meta.pool.testnet"
 const OPERATOR_ACCOUNT = "operator." + CONTRACT_ID;
@@ -51,6 +51,10 @@ function showWho(resp: http.ServerResponse) {
   resp.write(`<div class="top-info">Network:<b>${network.current}</b> - contract: <b>${CONTRACT_ID}</b></div>`)
 }
 
+function asHM(durationHours:number){
+  return Math.trunc(durationHours)+"h "+Math.round((durationHours-Math.trunc(durationHours))*60)+"m"
+}
+
 //------------------------------------------
 //Main HTTP-Request Handler - stats server
 //------------------------------------------
@@ -72,6 +76,7 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
       resp.end("pong");
     }
     else if (urlParts.pathname === '/epoch') {
+      resp.setHeader("Access-Control-Allow-Origin","*")
       resp.end(JSON.stringify(epoch));
     }
     // else if (urlParts.pathname === '/shutdown') {
@@ -111,16 +116,16 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
             <tr><td>Epoch blocks elapsed </td><td>${near.lastBlockHeightSeen() - epoch.start_height}<tr><td>
             <tr><td>Epoch advance </td><td>${Math.round((near.lastBlockHeightSeen() - epoch.start_height)/epoch.length*100)}%<tr><td>
             
-            <tr><td>Epoch started</td><td>${epoch.init_dtm.toString()} => ${hoursFromStart}hs ago</td></tr>
-            <tr><td>Epoch ends</td><td>${epoch.ends_dtm.toString()} => in ${hoursToEnd}hs<tr><td>
+            <tr><td>Epoch started</td><td>${epoch.init_dtm.toString()} => ${asHM(hoursFromStart)} ago</td></tr>
+            <tr><td>Epoch ends</td><td>${epoch.ends_dtm.toString()} => in ${asHM(hoursToEnd)}<tr><td>
           </table>
 
           <div class="progress">
             <div class="elapsed" style="width:${hoursFromStartPct}%">
-            ${hoursFromStart}hs
+            ${asHM(hoursFromStart)}
             </div>
             <div class="remaining" style="width:${100 - hoursFromStartPct}%">
-            ${hoursToEnd}hs
+            ${asHM(hoursToEnd)}
             </div>
           </div>
           `);
@@ -206,15 +211,15 @@ class EpochInfo {
   }
 
   hours_to_block(blockNum: number): number {
-    return Math.round((this.block_dtm(blockNum).getTime() - this.init_dtm.getTime()) / HOURS * 10) / 10;
+    return Math.round((this.block_dtm(blockNum).getTime() - this.init_dtm.getTime()) / HOURS * 100) / 100;
   }
 
   hours_from_start(): number {
-    return Math.round((new Date().getTime() - this.init_dtm.getTime()) / HOURS * 10) / 10;
+    return Math.round((new Date().getTime() - this.init_dtm.getTime()) / HOURS * 100) / 100;
   }
 
   hours_to_end(): number {
-    return Math.round((this.init_dtm.getTime() + this.duration_ms - new Date().getTime()) / HOURS * 10) / 10;
+    return Math.round((this.init_dtm.getTime() + this.duration_ms - new Date().getTime()) / HOURS * 100) / 100;
   }
 }
 

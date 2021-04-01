@@ -648,7 +648,7 @@ async function main() {
 
   //validate arguments
   for (const arg of process.argv){
-    if (arg.endsWith("/node")||arg.endsWith("/main")||arg.endsWith("/main.js")) {
+    if (arg.endsWith("/node")||arg.endsWith("/main")||arg.endsWith(".js")) {
       continue;
     }
     if (!["rebuild", "list", "update","test"].includes(arg)) {

@@ -584,21 +584,23 @@ async function beat() {
     // RETRIEVE UNSTAKED FUNDS
     for (let inx = 0; inx < pools.length; inx++) {
       const pool = pools[inx];
-      if (near.yton(pool.unstaked) > 0 && pool.unstaked_requested_epoch_height != "0" 
-            && BigInt(contract_state.env_epoch_height)>=BigInt(pool.unstaked_requested_epoch_height)+BigInt(NUM_EPOCHS_TO_UNLOCK)) 
-        {
-
-        //try RETRIEVE UNSTAKED FUNDS
-        console.log(`about to try RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
-        TotalCalls.retrieve++;
-        try {
-          let result = await metaPool.call("retrieve_funds_from_a_pool", { inx: inx });
-          console.log(`RESULT:${yton(result)}N`)
-        }
-        catch (ex) {
-          console.error(ex);
-        }
-        await sleep(5 * SECONDS)
+      if (near.yton(pool.unstaked) > 0 && pool.unstaked_requested_epoch_height != "0"){
+          const now = BigInt(contract_state.env_epoch_height);
+          let when = BigInt(pool.unstaked_requested_epoch_height)+BigInt(NUM_EPOCHS_TO_UNLOCK);
+          if (when > now+30n)  when=now; //bad data or hard-fork
+          if (when>=now) {
+            //try RETRIEVE UNSTAKED FUNDS
+            console.log(`about to try RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
+            TotalCalls.retrieve++;
+            try {
+              let result = await metaPool.call("retrieve_funds_from_a_pool", { inx: inx });
+              console.log(`RESULT:${yton(result)}N`)
+            }
+            catch (ex) {
+              console.error(ex);
+            }
+            await sleep(5 * SECONDS)
+          }
       }
     }
   }

@@ -138,7 +138,7 @@ export async function jsonRpcInternal(payload: Record<string, any>): Promise<any
  * @param method jsonRpc method to call
  * @param jsonRpcParams string[] with parameters
  */
-export function jsonRpc(method: string, jsonRpcParams: any): Promise<any> {
+export async function jsonRpc(method: string, jsonRpcParams: any): Promise<any> {
     const payload = {
         method: method,
         params: jsonRpcParams,

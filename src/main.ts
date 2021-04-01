@@ -648,10 +648,13 @@ async function main() {
 
   //validate arguments
   for (const arg of process.argv){
-    if (arg.endsWith("/node")) continue;
-    if (arg.endsWith("/main")) continue;
-    if (!["rebuild","list","update"].includes(arg)) throw Error("invalid argument: "+arg)
-  }
+    if (arg.endsWith("/node")||arg.endsWith("/main")||arg.endsWith("/main.js")) {
+      continue;
+    }
+    if (!["rebuild", "list", "update","test"].includes(arg)) {
+        throw Error("invalid argument: " + arg);
+    }            
+}
 
   //UTILITY MODE, rebuild stakes
   if (process.argv.includes("rebuild")) {

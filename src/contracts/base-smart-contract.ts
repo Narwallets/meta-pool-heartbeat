@@ -16,8 +16,8 @@ export class SmartContract {
     async view(method:string, args?:Record<string,any>){
         return near.view(this.contract_account,method,args||{});
     }
-    async call(method:string, args:Record<string,any>,TGas?:number,attachedNEAR?:number){
-        return near.call(this.contract_account,method,args,this.signer,this.signer_private_key,TGas||200,attachedNEAR||0);
+    async call(method:string, args:Record<string,any>,TGas?:number,attachedYoctoNear?:string){
+        return near.call(this.contract_account,method,args,this.signer,this.signer_private_key,TGas||200,attachedYoctoNear||"0");
     }
 
 }

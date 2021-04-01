@@ -71,10 +71,13 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
     else if (urlParts.pathname === '/ping') {
       resp.end("pong");
     }
-    else if (urlParts.pathname === '/shutdown') {
-      resp.end("shutdown");
-      process.exit(1);
+    else if (urlParts.pathname === '/epoch') {
+      resp.end(JSON.stringify(epoch));
     }
+    // else if (urlParts.pathname === '/shutdown') {
+    //   resp.end("shutdown");
+    //   process.exit(1);
+    // }
     else {
       //--------------
       //HTML RESPONSE
@@ -98,7 +101,7 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
         resp.write(`
           <table>
             <tr><td>Server Started</td><td>${StarDateTime.toString()}</td></tr>    
-            <tr><td>Total Calls</td><td>${util.inspect(TotalCalls)}  Acum:${globalPersistentData.beatCount}</td></tr>    
+            <tr><td>Total Calls</td><td>${util.inspect(TotalCalls)}  Accum:${globalPersistentData.beatCount}</td></tr>    
           </table>
 
           <table>
@@ -135,7 +138,7 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
         resp.write(`<p>invalid path ${urlParts.pathname}</p>`);
       }
 
-      //close </html> reposnse page
+      //close </html> response page
       server.writeFileContents('index3-footer.html', resp);
     }
 
@@ -394,23 +397,23 @@ async function list_validators(updateList:boolean) {
   }
 
   //use points to determine pct
-  let sumbp=0;
+  let sum_bp=0;
   for (let item of newList) {
     item.bp = Math.round(item.points/totalPoints*10000);
-    sumbp+=item.bp
+    sum_bp+=item.bp
   }
   //mak the sum 100%
   let lastItem = newList[newList.length-1]
-  lastItem.bp = 10000-(sumbp-(lastItem.bp||0));
+  lastItem.bp = 10000-(sum_bp-(lastItem.bp||0));
 
   console.log(newList);
 
   //check sum
-  sumbp=0;
+  sum_bp=0;
   for (let item of newList) {
-    sumbp += item.bp||0
+    sum_bp += item.bp||0
   }
-  if(sumbp!=10000) throw Error("sum!=100%");
+  if(sum_bp!=10000) throw Error("sum!=100%");
 
   //end list construction
 
@@ -460,9 +463,9 @@ async function list_validators(updateList:boolean) {
   }
 
   //check sum of bp
-  const checkbp = await metaPool.sum_staking_pool_list_weight_basis_points()
-  console.log(`sum bp = ${checkbp}`)
-  if(checkbp!=10000) throw Error("sum bp expected to be 10000, but it is "+checkbp)
+  const check_bp = await metaPool.sum_staking_pool_list_weight_basis_points()
+  console.log(`sum bp = ${check_bp}`)
+  if(check_bp!=10000) throw Error("sum bp expected to be 10000, but it is "+check_bp)
 
 
 }
@@ -485,7 +488,7 @@ async function beat() {
   console.log(`-------------------------------`)
   console.log(`env_epoch_height:${env_epoch_height}`)
 
-  //if the epoch eneded, compute the new one
+  //if the epoch ended, compute the new one
   if (new Date().getTime() >= epoch.ends_dtm.getTime()) {
     //epoch ended
     console.log("COMPUTING NEW EPOCH")
@@ -539,7 +542,7 @@ async function beat() {
       const pool = pools[inx];
       if ((near.yton(pool.staked) > 0 || near.yton(pool.unstaked) > 0) && pool.last_asked_rewards_epoch_height != env_epoch_height) {
         //ping on the pool so it calculates rewards
-        console.log(`about to call PING & DISTRIB on pool[${inx}]:${JSON.stringify(pool)}`)
+        console.log(`about to call PING & DISTRIBUTE on pool[${inx}]:${JSON.stringify(pool)}`)
         console.log(`pool.PING`)
         TotalCalls.ping++;
         try {
@@ -558,12 +561,12 @@ async function beat() {
       }
     }
 
-    // RETRIEVE UNSTK FUNDS
+    // RETRIEVE UNSTAKED FUNDS
     for (let inx = 0; inx < pools.length; inx++) {
       const pool = pools[inx];
       if (near.yton(pool.unstaked) > 0 && pool.unstaked_requested_epoch_height != "0" && epoch_difference(env_epoch_height, pool.unstaked_requested_epoch_height) >= 0) {
         //ping on the pool so it calculates rewards
-        console.log(`about to call RETRIEVE UNSTK FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
+        console.log(`about to call RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
         TotalCalls.retrieve++;
         try {
           let result = await metaPool.call("retrieve_funds_from_a_pool", { inx: inx });
@@ -663,7 +666,7 @@ async function main() {
 
   //Start Web Server
   //-----------------
-  //We start a barebones minimal web server to monitor meta-pool-heartbeat stats
+  //We start a bare-bones minimal web server to monitor meta-pool-heartbeat stats
   //When a request arrives, it will call appHandler(urlParts, request, response)
   server = new BareWebServer('../public_html', appHandler, MONITORING_PORT)
   server.start()

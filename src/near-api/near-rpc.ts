@@ -263,10 +263,10 @@ export function call(
     sender: string,
     privateKey: string,
     TGas: number,
-    attachedAmount: number = 0): Promise<any> {
+    attachedYoctos?: string): Promise<any> {
 
     return broadcast_tx_commit_actions(
-        [TX.functionCall(method, params, new BN(TGas.toString() + "0".repeat(12)), new BN(ntoy(attachedAmount)))],
+        [TX.functionCall(method, params, new BN(TGas.toString() + "0".repeat(12)), new BN(attachedYoctos||"0"))],
         sender, contractId, privateKey)
 }
 

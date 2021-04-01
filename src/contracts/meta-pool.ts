@@ -2,13 +2,14 @@ import * as near from '../near-api/near-rpc.js';
 import {ntoy} from '../near-api/near-rpc.js';
 import { SmartContract } from './base-smart-contract.js';
 
-import type {ContractState,StakingPoolJSONInfo,VLoanInfo,GetAccountInfoResult} from "./meta-pool-structs.js"
+import type {ContractState,StakingPoolJSONInfo,VLoanInfo,GetAccountInfoResult, LiquidUnstakeResult, RemoveLiquidityResult} from "./meta-pool-structs.js"
 import type {ContractInfo} from "./NEP129.js"
 
 function checkInteger(n:number){
     if (n<0||n>10000||n!=Math.trunc(n)) throw Error("invalid integer: "+n)
 }
 
+type U128String = string;
 export class MetaPool extends SmartContract {
 
     async get_env_epoch_height():Promise<string>{ //U64String
@@ -49,14 +50,14 @@ export class MetaPool extends SmartContract {
     }
 
     deposit(nearsToDeposit:number) : Promise<void> {
-        return this.call("deposit", {}, 25, nearsToDeposit)
+        return this.call("deposit", {}, 25, ntoy(nearsToDeposit))
     }
     withdraw(nearsToWithdraw:number) : Promise<void> {
         return this.call("withdraw", {amount:ntoy(nearsToWithdraw)})
     }
 
     deposit_and_stake(nearsToDeposit:number) : Promise<void> {
-        return this.call("deposit_and_stake", {}, 50, nearsToDeposit)
+        return this.call("deposit_and_stake", {}, 50, ntoy(nearsToDeposit))
     }
 
     stake(amount:number) : Promise<void> {
@@ -82,13 +83,13 @@ export class MetaPool extends SmartContract {
     }
 
     //return potential NEARs to receive
-    get_near_amount_sell_stnear(stnearToSell:number) : Promise<string> {
+    get_near_amount_sell_stnear(stnearToSell:number) : Promise<U128String> {
         return this.view("get_near_amount_sell_stnear", {"stnear_to_sell":ntoy(stnearToSell)})
     }
 
     //sell stnear & return NEARs received
-    sell_stnear(stnearToSell:number, minExpectedNear:number) : Promise<string> {
-        return this.call("sell_stnear", {"stnear_to_sell":ntoy(stnearToSell), "min_expected_near":ntoy(minExpectedNear)}, 75)
+    liquid_unstake(stnearToBurn:number, minExpectedNear:number) : Promise<LiquidUnstakeResult> {
+        return this.call("liquid_unstake", {"stnear_to_burn":ntoy(stnearToBurn), "min_expected_near":ntoy(minExpectedNear)}, 75,"1")
     }
 
     //current fee for liquidity providers
@@ -97,12 +98,12 @@ export class MetaPool extends SmartContract {
     }
     
     //add liquidity
-    nslp_add_liquidity(amount:number) : Promise<void> {
-        return this.call("nslp_add_liquidity", {"amount":ntoy(amount)}, 75)
+    nslp_add_liquidity(amount:number) : Promise<number> {
+        return this.call("nslp_add_liquidity", {}, 75, ntoy(amount))
     }
 
     //remove liquidity
-    nslp_remove_liquidity(amount:number) : Promise<void> {
+    nslp_remove_liquidity(amount:number) : Promise<RemoveLiquidityResult> {
         return this.call("nslp_remove_liquidity", {"amount":ntoy(amount)}, 100)
     }
 
@@ -114,19 +115,19 @@ export class MetaPool extends SmartContract {
     }
 
     set_vloan_request(amount_requested:number, staking_pool_account_id:string, 
-                commited_fee:number, commited_fee_duration:number, 
+                committed_fee:number, committed_fee_duration:number, 
                 information_url: String): Promise<void> 
         {
         return this.call("set_vloan_request",{
             amount_requested:ntoy(amount_requested), 
             staking_pool_account_id:staking_pool_account_id,
-            commited_fee:commited_fee*100,  //send in basis points
-            commited_fee_duration:commited_fee_duration, 
+            committed_fee:committed_fee*100,  //send in basis points
+            committed_fee_duration:committed_fee_duration, 
             information_url: information_url });
     }
 
     vloan_activate(feeNears:number): Promise<void> {
-        return this.call("vloan_activate",{},25,feeNears)
+        return this.call("vloan_activate",{}, 25,ntoy(feeNears))
     }
     vloan_convert_back_to_draft(): Promise<void> {
         return this.call("vloan_convert_back_to_draft",{})
@@ -137,5 +138,5 @@ export class MetaPool extends SmartContract {
     vloan_delete(): Promise<void> {
         return this.call("vloan_delete",{})
     }
-   
+
 }

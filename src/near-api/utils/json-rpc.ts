@@ -108,6 +108,9 @@ export async function jsonRpcInternal(payload: Record<string, any>): Promise<any
                     throw new Error("Error: " + errorMessage);
                 }
             }
+            if (!response.result) {
+                console.log("response.result=",response.result)
+            }
             return response.result;
         }
     }

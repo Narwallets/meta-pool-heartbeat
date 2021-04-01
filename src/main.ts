@@ -304,6 +304,29 @@ async function rebuild_stakes() {
   }
 }
 
+//
+// UTILITY: list full sp info
+//
+async function list_full_sp_info() {
+  //show full info
+  let stakingPool = new SmartContract("", OPERATOR_ACCOUNT, credentials.private_key)
+
+  let pools = await metaPool.get_staking_pool_list();
+  for (let inx = 0; inx < pools.length; inx++) {
+    console.log("-------------------")
+    const pool = pools[inx];
+    console.log(JSON.stringify(pool))
+    try {
+      stakingPool.contract_account = pool.account_id;
+      const ourData = await stakingPool.view("get_account",{account_id:CONTRACT_ID})
+      console.log(JSON.stringify(ourData))
+    }
+    catch (ex) {
+      console.error(ex);
+    }
+  }
+}
+
 // ---------------
 // UTILITY: list validators
 // compose a list of sane validators and some points to compute percentages
@@ -588,13 +611,18 @@ async function beat() {
           const now = BigInt(contract_state.env_epoch_height);
           let when = BigInt(pool.unstaked_requested_epoch_height)+BigInt(NUM_EPOCHS_TO_UNLOCK);
           if (when > now+30n)  when=now; //bad data or hard-fork
-          if (when>=now) {
+          if (when<=now) {
             //try RETRIEVE UNSTAKED FUNDS
             console.log(`about to try RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
             TotalCalls.retrieve++;
             try {
               let result = await metaPool.call("retrieve_funds_from_a_pool", { inx: inx });
-              console.log(`RESULT:${yton(result)}N`)
+              if (result==undefined){
+                console.log(`RESULT is undefined`)  
+              }
+              else {
+                console.log(`RESULT:${yton(result)}N`)
+              }
             }
             catch (ex) {
               console.error(ex);
@@ -677,7 +705,7 @@ async function main() {
     if (arg.endsWith("/node")||arg.endsWith("/main")||arg.endsWith(".js")) {
       continue;
     }
-    if (!["rebuild", "list", "update","test"].includes(arg)) {
+    if (!["rebuild", "list", "update","test","sp"].includes(arg)) {
         throw Error("invalid argument: " + arg);
     }            
 }
@@ -689,7 +717,13 @@ async function main() {
   }
   //UTILITY MODE, list
   if (process.argv.includes("list")) {
-    await list_validators( process.argv.includes("update") );
+    if (process.argv.includes("sp")) {
+      await list_full_sp_info();
+    }
+    else 
+    {
+      await list_validators( process.argv.includes("update") );
+    }
     process.exit(1);
   }
 

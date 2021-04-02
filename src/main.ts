@@ -191,7 +191,7 @@ class EpochInfo {
   public advance: number; //0-1
   public duration_till_now_ms: number;
   public ends_dtm: Date;
-  //public data:Record<string,any>; //to store epoch-related data
+
   constructor(prevBlock: near.BlockInfo, startBlock:near.BlockInfo, lastBlock:near.BlockInfo) {
     
     this.prev_timestamp = Math.round(prevBlock.header.timestamp/1e6)
@@ -202,38 +202,40 @@ class EpochInfo {
     if (this.start_timestamp< new Date().getTime()-48*HOURS) { //genesis or hard-fork
         this.start_timestamp =  new Date().getTime()-6*HOURS
     }
+    if (this.prev_timestamp< new Date().getTime()-48*HOURS) { //genesis or hard-fork
+      this.prev_timestamp =  new Date().getTime()-12*HOURS
+    }
 
     let noPrevBloc = startBlock.header.height == prevBlock.header.height;
     this.length = startBlock.header.height - prevBlock.header.height
     if (this.length==0) { //!prevBlock, genesis or hard-fork
-      this.length=41000;
+      this.length=43200;
       this.duration_ms=12*HOURS;
+      //estimated start & prev timestamps
       this.advance = Math.round(Number(((BigInt(lastBlock.header.height) - BigInt(this.start_block_height)) * BigInt(1000000)) / BigInt(this.length)))/1000000;
       this.start_timestamp = this.last_block_timestamp - this.duration_ms * this.advance
       this.prev_timestamp = this.start_timestamp-this.duration_ms
     }
     else {
-      this.length = startBlock.header.height - prevBlock.header.height
-      this.duration_till_now_ms = this.last_block_timestamp - this.start_timestamp;
-      this.advance = this.update(lastBlock);
-      this.prev_timestamp = Math.round(prevBlock.header.timestamp/1e6)
-      this.duration_ms = Math.round(this.start_timestamp-this.prev_timestamp)
+      this.duration_ms = this.start_timestamp-this.prev_timestamp
     }
 
-    this.duration_till_now_ms = this.last_block_timestamp - new Date().getTime()
     this.start_dtm = new Date(this.start_timestamp)
     this.ends_dtm = new Date(this.start_timestamp + this.duration_ms)
+    this.duration_till_now_ms = this.last_block_timestamp - this.start_timestamp 
+    this.advance = this.update(lastBlock);
  
   }
 
   update(lastBlock:near.BlockInfo):number{
     this.last_block_timestamp = Math.round(lastBlock.header.timestamp/1e6)
-    const duration_till_now_ms = this.last_block_timestamp - this.start_dtm.getTime()
+    const duration_till_now_ms = this.last_block_timestamp - this.start_timestamp 
     const advance = Math.round(Number(((BigInt(lastBlock.header.height) - BigInt(this.start_block_height)) * BigInt(1000000)) / BigInt(this.length)))/1000000;
-    if (advance>0.5){
+    if (advance>0.1){
       this.ends_dtm = new Date(this.start_timestamp + duration_till_now_ms + duration_till_now_ms*(1-advance))
     }
     this.duration_till_now_ms = duration_till_now_ms;
+    this.advance = advance;
     return advance;
   }
 
@@ -269,10 +271,7 @@ async function computeCurrentEpoch() {
 
   const lastBlock = await near.latestBlock();
   const firstBlock = await near.block(lastBlock.header.next_epoch_id); //next_epoch_id looks like "current" epoch_id
-  const prevBlock = 
-   (lastBlock.header.epoch_id='11111111111111111111111111111111')? //hard-fork, no prev-epoch
-      firstBlock : await near.block(lastBlock.header.epoch_id); //epoch_id looks like "prev" epoch_id
-  
+  const prevBlock = await near.block(lastBlock.header.epoch_id) //epoch_id looks like "prev" epoch_id
   
   epoch = new EpochInfo(prevBlock,firstBlock, lastBlock);
   console.log("estimated epoch duration in hours:", epoch.duration_ms / HOURS)
@@ -702,7 +701,7 @@ async function main() {
 
   //validate arguments
   for (const arg of process.argv){
-    if (arg.endsWith("/node")||arg.endsWith("/main")||arg.endsWith(".js")) {
+    if (arg.endsWith("/node")||arg.endsWith("/main")||arg.endsWith(".js")||arg.endsWith(".exe")) {
       continue;
     }
     if (!["rebuild", "list", "update","test","sp"].includes(arg)) {

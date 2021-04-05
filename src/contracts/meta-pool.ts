@@ -10,11 +10,9 @@ function checkInteger(n:number){
 }
 
 type U128String = string;
-export class MetaPool extends SmartContract {
+type U64String = string;
 
-    async get_env_epoch_height():Promise<string>{ //U64String
-        return this.view("get_env_epoch_height");
-    }
+export class MetaPool extends SmartContract {
 
     //----------------------------
     //staking pool list management
@@ -44,6 +42,14 @@ export class MetaPool extends SmartContract {
         return this.view("get_contract_state")
     }
 
+    async get_number_of_accounts() : Promise<BigInt> {
+        return BigInt(await this.view("get_number_of_accounts",{}))
+    }
+
+    get_accounts_info(from_index: number, limit: number) : Promise<GetAccountInfoResult[]> {
+        return this.view("get_accounts_info",{from_index:from_index, limit:limit})  //params are U64String
+    }
+    
     //get account info from current connected user account
     get_account_info(accountId:string) : Promise<GetAccountInfoResult> {
         return this.view("get_account_info",{account_id:accountId }) 
@@ -137,6 +143,30 @@ export class MetaPool extends SmartContract {
     }
     vloan_delete(): Promise<void> {
         return this.call("vloan_delete",{})
+    }
+
+    sync_unstaked_balance(sp_inx: number) : Promise<void> {
+        return this.call("sync_unstaked_balance",{sp_inx:sp_inx})
+    }
+
+    retrieve_funds_from_a_pool(inx:number) : Promise<string>{
+        return this.call("retrieve_funds_from_a_pool",{inx:inx})
+    }
+   
+    //--FIXES
+    rebuild_stake_from_pool_information(sp_inx: number, staked:U128String, unstaked:U128String) : Promise<void> {
+        console.log("rebuild_stake_from_pool_information", JSON.stringify({sp_inx:sp_inx, staked:staked, unstaked:unstaked}))
+        return this.call("rebuild_stake_from_pool_information",{sp_inx:sp_inx, staked:staked, unstaked:unstaked})
+    }
+    //--FIXES
+    rebuild_contract_information(total_actually_staked:U128String, total_unstaked_and_waiting:U128String) : Promise<void> {
+        console.log("rebuild_contract_information",JSON.stringify({total_actually_staked:total_actually_staked, total_unstaked_and_waiting:total_unstaked_and_waiting}));
+        return this.call("rebuild_contract_information",{total_actually_staked:total_actually_staked, total_unstaked_and_waiting:total_unstaked_and_waiting})
+    }
+    //--FIXES
+    stake_available(account_id:string){
+        console.log("stake_available",account_id);
+        return this.call("stake_available",{account_id:account_id})
     }
 
 }

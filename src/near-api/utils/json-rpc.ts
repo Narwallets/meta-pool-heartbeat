@@ -20,7 +20,7 @@ export function getHeaders() {
 }
 
 
-function ytonFull(str: string): string {
+export function ytonFull(str: string): string {
     let result = (str + "").padStart(25, "0")
     result = result.slice(0, -24) + "." + result.slice(-24)
     return result
@@ -36,15 +36,15 @@ export function formatJSONErr(obj: any): any {
     //---------
     //try some enhancements
     //---------
-    //convert yoctos to near
+    //convert yoctoNEAR to near
     const largeNumbersFound = text.match(/\d{14,50}/g)
     if (largeNumbersFound) {
         for (const matches of largeNumbersFound) {
             const parts = matches.split(" ")
-            const yoctosString = parts.pop() || ""
-            if (yoctosString.length >= 20) {
+            const yoctoString = parts.pop() || ""
+            if (yoctoString.length >= 20) {
                 // convert to NEAR
-                text = text.replace(new RegExp(yoctosString, "g"), ytonFull(yoctosString))
+                text = text.replace(new RegExp(yoctoString, "g"), ytonFull(yoctoString))
             }
         }
     }

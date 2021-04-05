@@ -15,14 +15,15 @@ import { yton } from './near-api/near-rpc.js';
 import { MetaPool } from './contracts/meta-pool.js'
 import { loadJSON, saveJSON } from './util/save-load-JSON.js';
 import { SmartContract } from './contracts/base-smart-contract.js';
-import { StakingPoolJSONInfo } from './contracts/meta-pool-structs.js';
+import { ContractState, StakingPoolJSONInfo } from './contracts/meta-pool-structs.js';
+import { formatLargeNumbers } from './util/format-near.js';
 
 //time in ms
 const SECONDS = 1000
 const MINUTES = 60 * SECONDS
 const HOURS = 60 * MINUTES
 
-const NUM_EPOCHS_TO_UNLOCK=4
+const NUM_EPOCHS_TO_UNLOCK = 4
 
 const MONITORING_PORT = 7000
 
@@ -36,11 +37,11 @@ const OWNER_ACCOUNT = "lucio." + network.current;
 const StarDateTime = new Date()
 let TotalCalls = {
   beats: 0,
-  stake:0,
-  unstake:0,
-  ping:0,
-  distribute_rewards:0,
-  retrieve:0
+  stake: 0,
+  unstake: 0,
+  ping: 0,
+  distribute_rewards: 0,
+  retrieve: 0
 }
 
 class PersistentData {
@@ -53,8 +54,8 @@ function showWho(resp: http.ServerResponse) {
   resp.write(`<div class="top-info">Network:<b>${network.current}</b> - contract: <b>${CONTRACT_ID}</b></div>`)
 }
 
-function asHM(durationHours:number){
-  return Math.trunc(durationHours)+"h "+Math.round((durationHours-Math.trunc(durationHours))*60)+"m"
+function asHM(durationHours: number) {
+  return Math.trunc(durationHours) + "h " + Math.round((durationHours - Math.trunc(durationHours)) * 60) + "m"
 }
 
 //------------------------------------------
@@ -78,7 +79,7 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
       resp.end("pong");
     }
     else if (urlParts.pathname === '/epoch') {
-      resp.setHeader("Access-Control-Allow-Origin","*")
+      resp.setHeader("Access-Control-Allow-Origin", "*")
       resp.end(JSON.stringify(epoch));
     }
     // else if (urlParts.pathname === '/shutdown') {
@@ -112,11 +113,12 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
           </table>
 
           <table>
-            <tr><td>Prev epoch duration</td><td>${asHM(epoch.duration_ms/HOURS)}<tr><td>
+            <tr><td>Contract State Epoch</td><td>${globalContractState.env_epoch_height}<tr><td>
+            <tr><td>Prev epoch duration</td><td>${asHM(epoch.duration_ms / HOURS)}<tr><td>
             <tr><td>Epoch start height </td><td>${epoch.start_block_height}<tr><td>
             <tr><td>last_block_height</td><td>${globalLastBlock.header.height}<tr><td>
             <tr><td>Epoch blocks elapsed </td><td>${globalLastBlock.header.height - epoch.start_block_height}<tr><td>
-            <tr><td>Epoch advance </td><td>${Math.round((globalLastBlock.header.height - epoch.start_block_height)/epoch.length*100)}%<tr><td>
+            <tr><td>Epoch advance </td><td>${Math.round((globalLastBlock.header.height - epoch.start_block_height) / epoch.length * 100)}%<tr><td>
             
             <tr><td>Epoch started</td><td>${epoch.start_dtm.toString()} => ${asHM(hoursFromStart)} ago</td></tr>
             <tr><td>Epoch ends</td><td>${epoch.ends_dtm.toString()} => in ${asHM(hoursToEnd)}<tr><td>
@@ -179,6 +181,7 @@ let metaPool: MetaPool;
 let chainStatus: any;
 //let genesisConfig: any;
 let epoch: EpochInfo;
+let globalContractState:ContractState;
 
 class EpochInfo {
   public length: number;
@@ -192,47 +195,47 @@ class EpochInfo {
   public duration_till_now_ms: number;
   public ends_dtm: Date;
 
-  constructor(prevBlock: near.BlockInfo, startBlock:near.BlockInfo, lastBlock:near.BlockInfo) {
-    
-    this.prev_timestamp = Math.round(prevBlock.header.timestamp/1e6)
-    this.start_block_height = startBlock.header.height
-    this.start_timestamp = Math.round(startBlock.header.timestamp/1e6)
-    this.last_block_timestamp = Math.round(lastBlock.header.timestamp/1e6)
+  constructor(prevBlock: near.BlockInfo, startBlock: near.BlockInfo, lastBlock: near.BlockInfo) {
 
-    if (this.start_timestamp< new Date().getTime()-48*HOURS) { //genesis or hard-fork
-        this.start_timestamp =  new Date().getTime()-6*HOURS
+    this.prev_timestamp = Math.round(prevBlock.header.timestamp / 1e6)
+    this.start_block_height = startBlock.header.height
+    this.start_timestamp = Math.round(startBlock.header.timestamp / 1e6)
+    this.last_block_timestamp = Math.round(lastBlock.header.timestamp / 1e6)
+
+    if (this.start_timestamp < new Date().getTime() - 48 * HOURS) { //genesis or hard-fork
+      this.start_timestamp = new Date().getTime() - 6 * HOURS
     }
-    if (this.prev_timestamp< new Date().getTime()-48*HOURS) { //genesis or hard-fork
-      this.prev_timestamp =  new Date().getTime()-12*HOURS
+    if (this.prev_timestamp < new Date().getTime() - 48 * HOURS) { //genesis or hard-fork
+      this.prev_timestamp = new Date().getTime() - 12 * HOURS
     }
 
     let noPrevBloc = startBlock.header.height == prevBlock.header.height;
     this.length = startBlock.header.height - prevBlock.header.height
-    if (this.length==0) { //!prevBlock, genesis or hard-fork
-      this.length=43200;
-      this.duration_ms=12*HOURS;
+    if (this.length == 0) { //!prevBlock, genesis or hard-fork
+      this.length = 43200;
+      this.duration_ms = 12 * HOURS;
       //estimated start & prev timestamps
-      this.advance = Math.round(Number(((BigInt(lastBlock.header.height) - BigInt(this.start_block_height)) * BigInt(1000000)) / BigInt(this.length)))/1000000;
+      this.advance = Math.round(Number(((BigInt(lastBlock.header.height) - BigInt(this.start_block_height)) * BigInt(1000000)) / BigInt(this.length))) / 1000000;
       this.start_timestamp = this.last_block_timestamp - this.duration_ms * this.advance
-      this.prev_timestamp = this.start_timestamp-this.duration_ms
+      this.prev_timestamp = this.start_timestamp - this.duration_ms
     }
     else {
-      this.duration_ms = this.start_timestamp-this.prev_timestamp
+      this.duration_ms = this.start_timestamp - this.prev_timestamp
     }
 
     this.start_dtm = new Date(this.start_timestamp)
     this.ends_dtm = new Date(this.start_timestamp + this.duration_ms)
-    this.duration_till_now_ms = this.last_block_timestamp - this.start_timestamp 
+    this.duration_till_now_ms = this.last_block_timestamp - this.start_timestamp
     this.advance = this.update(lastBlock);
- 
+
   }
 
-  update(lastBlock:near.BlockInfo):number{
-    this.last_block_timestamp = Math.round(lastBlock.header.timestamp/1e6)
-    const duration_till_now_ms = this.last_block_timestamp - this.start_timestamp 
-    const advance = Math.round(Number(((BigInt(lastBlock.header.height) - BigInt(this.start_block_height)) * BigInt(1000000)) / BigInt(this.length)))/1000000;
-    if (advance>0.1){
-      this.ends_dtm = new Date(this.start_timestamp + duration_till_now_ms + duration_till_now_ms*(1-advance))
+  update(lastBlock: near.BlockInfo): number {
+    this.last_block_timestamp = Math.round(lastBlock.header.timestamp / 1e6)
+    const duration_till_now_ms = this.last_block_timestamp - this.start_timestamp
+    const advance = Math.round(Number(((BigInt(lastBlock.header.height) - BigInt(this.start_block_height)) * BigInt(1000000)) / BigInt(this.length))) / 1000000;
+    if (advance > 0.1) {
+      this.ends_dtm = new Date(this.start_timestamp + duration_till_now_ms + duration_till_now_ms * (1 - advance))
     }
     this.duration_till_now_ms = duration_till_now_ms;
     this.advance = advance;
@@ -272,8 +275,8 @@ async function computeCurrentEpoch() {
   const lastBlock = await near.latestBlock();
   const firstBlock = await near.block(lastBlock.header.next_epoch_id); //next_epoch_id looks like "current" epoch_id
   const prevBlock = await near.block(lastBlock.header.epoch_id) //epoch_id looks like "prev" epoch_id
-  
-  epoch = new EpochInfo(prevBlock,firstBlock, lastBlock);
+
+  epoch = new EpochInfo(prevBlock, firstBlock, lastBlock);
   console.log("estimated epoch duration in hours:", epoch.duration_ms / HOURS)
   console.log("Epoch started:", epoch.start_dtm.toString(), " => ", asHM(epoch.hours_from_start()), "hs ago")
   console.log("Epoch ends:", epoch.ends_dtm.toString(), " => in ", asHM(epoch.hours_to_end()), "hs")
@@ -303,26 +306,133 @@ async function rebuild_stakes() {
   }
 }
 
+function showNumbers(json:any){
+  console.log( formatLargeNumbers( util.inspect(json)));
+}
+
 //
 // UTILITY: list full sp info
 //
-async function list_full_sp_info() {
+async function list_full_sp_info(contractData: ContractState,  rebuild:boolean) {
   //show full info
+
   let stakingPool = new SmartContract("", OPERATOR_ACCOUNT, credentials.private_key)
 
+  let our_sums= {
+    sum_staked: 0n,
+    sum_unstaked: 0n,
+    both: 0n,
+  }
+  let sp_sums= {
+    sp_sum_staked: 0n,
+    sp_sum_unstaked: 0n,
+    both: 0n,
+  }
+
   let pools = await metaPool.get_staking_pool_list();
+
   for (let inx = 0; inx < pools.length; inx++) {
     console.log("-------------------")
     const pool = pools[inx];
-    console.log(JSON.stringify(pool))
+    showNumbers(pool);
+    our_sums.sum_staked += BigInt(pool.staked);
+    our_sums.sum_unstaked += BigInt(pool.unstaked);
     try {
       stakingPool.contract_account = pool.account_id;
-      const ourData = await stakingPool.view("get_account",{account_id:CONTRACT_ID})
-      console.log(JSON.stringify(ourData))
+      const theirData = await stakingPool.view("get_account", { account_id: CONTRACT_ID })
+      showNumbers(theirData);
+      sp_sums.sp_sum_staked += BigInt(theirData.staked_balance);
+      sp_sums.sp_sum_unstaked += BigInt(theirData.unstaked_balance);
+      if (rebuild){
+        if (theirData.staked_balance!=pool.staked || theirData.unstaked_balance!=pool.unstaked ){
+          console.log("-- ** REBUILD data")
+          await metaPool.rebuild_stake_from_pool_information(pool.inx, theirData.staked_balance, theirData.unstaked_balance);
+          console.log("-- ** ------------")
+        }
+      } 
     }
     catch (ex) {
       console.error(ex);
     }
+  }
+  console.log("-- sp sums ------------------")
+  sp_sums.both = sp_sums.sp_sum_staked + sp_sums.sp_sum_unstaked;
+  showNumbers(sp_sums);
+
+  console.log("-- our sums ------------------")
+  our_sums.both = our_sums.sum_staked + our_sums.sum_unstaked;
+  showNumbers( our_sums );
+
+  if (rebuild){
+    if ( sp_sums.sp_sum_staked.toString() != contractData.total_actually_staked  || sp_sums.sp_sum_unstaked.toString() != contractData.total_unstaked_and_waiting ){
+      console.log("-- ** REBUILD sum data")
+      await metaPool.rebuild_contract_information(sp_sums.sp_sum_staked.toString(), sp_sums.sp_sum_unstaked.toString());
+      console.log("-- ** ------------")
+    }
+  } 
+}
+
+//
+// UTILITY: list full users info
+//
+async function list_full_users_info(fix:boolean) {
+
+  try {
+    let userCount = Number(await metaPool.get_number_of_accounts());
+    console.log(`${userCount} Accounts`)
+
+    let stakingPool = new SmartContract("", OPERATOR_ACCOUNT, credentials.private_key)
+
+    let sums={
+      available: 0n,
+      unstaked: 0n,
+      unstaked_can_withdraw : 0n,
+      stake_shares: 0n,
+      stnear: 0n,
+    }
+
+    const BATCH=10
+    let start = 0
+    while (start < userCount) {
+      let accounts = await metaPool.get_accounts_info(start, BATCH);
+      for (let inx = 0; inx < accounts.length; inx++) {
+        console.log("-------------------")
+        const accountInfo = accounts[inx];
+        console.log(start+inx, accountInfo.account_id, near.yton(accountInfo.meta));
+
+        if (fix && accountInfo.available!="0") {
+          if (accountInfo.account_id!="treasury.meta.pool.testnet"
+            && accountInfo.account_id!="..NSLP.."
+            && accountInfo.account_id!="operator.meta.pool.testnet"
+            && accountInfo.account_id!="developers.near"
+          ) {
+            await metaPool.stake_available(accountInfo.account_id);
+          }
+        }
+
+        let show=false;
+        if (accountInfo.can_withdraw && accountInfo.unstaked!="0") {
+          sums.unstaked_can_withdraw += BigInt(accountInfo.unstaked)
+          show=true;
+        }
+        if (accountInfo.available!="0") {
+          show=true;
+        }
+        
+        if (show) showNumbers(accountInfo);
+
+        sums.available += BigInt(accountInfo.available)
+        sums.unstaked+= BigInt(accountInfo.unstaked)
+        sums.stake_shares += BigInt(accountInfo.stake_shares )
+        sums.stnear+= BigInt(accountInfo.stnear)
+      }
+      start += BATCH
+    }
+    console.log("---SUMS")
+    showNumbers(sums);
+  }
+  catch (ex) {
+    console.error(ex);
   }
 }
 
@@ -338,45 +448,45 @@ type PoolInfo = {
   uptime: number,
   fee: number,
   ourStake?: bigint,
-  currentPct?:number;
-  points:number;
-  bp?:number;
+  currentPct?: number;
+  points: number;
+  bp?: number;
 }
 
 //sort validators
-function sortCompare(a:PoolInfo, b:PoolInfo) {
+function sortCompare(a: PoolInfo, b: PoolInfo) {
   if (a.stake > b.stake) return -1;
   return 1;
 }
 // ---------------
-async function list_validators(updateList:boolean) {
+async function list_validators(updateList: boolean) {
 
   //make initial pool-list based on current_validators
-  const MILLION=BigInt(10**6)
+  const MILLION = BigInt(10 ** 6)
 
   let sumStakes = BigInt(0);
 
   let validators = await near.getValidators();
 
-  const initialList:PoolInfo[] = []
+  const initialList: PoolInfo[] = []
   for (let item of validators.current_validators) {
 
     const uptime = Math.round(item.num_produced_blocks / item.num_expected_blocks * 100)
     const stake = BigInt(item.stake)
 
     //only include uptime>95 && stake>2 MILLION
-    if (uptime>95 && stake > 2n*MILLION ) {
+    if (uptime > 95 && stake > 2n * MILLION) {
 
-      sumStakes+=stake;
+      sumStakes += stake;
 
       initialList.push({
-          name: item.account_id,
-          slashed: item.is_slashed,
-          stake_millions: Math.round(yton(item.stake))/1e6,
-          stake: stake,
-          uptime: uptime,
-          fee:10,
-          points:0
+        name: item.account_id,
+        slashed: item.is_slashed,
+        stake_millions: Math.round(yton(item.stake)) / 1e6,
+        stake: stake,
+        uptime: uptime,
+        fee: 10,
+        points: 0
       })
     }
 
@@ -386,7 +496,7 @@ async function list_validators(updateList:boolean) {
 
   let stakingPool = new SmartContract("", OPERATOR_ACCOUNT, credentials.private_key)
 
-  const newList:PoolInfo[] = []
+  const newList: PoolInfo[] = []
   //query fees to refine the list more
   for (let item of initialList) {
     stakingPool.contract_account = item.name;
@@ -394,24 +504,24 @@ async function list_validators(updateList:boolean) {
       const rewardFeeFraction = await stakingPool.view("get_reward_fee_fraction")
       item.fee = rewardFeeFraction.numerator * 100 / rewardFeeFraction.denominator;
     }
-    catch(ex){
+    catch (ex) {
       //Validator is not a staking-pool contract
       console.log(item.name + " did not respond to get_reward_fee_fraction")
       continue;
     }
-    
+
     try {
-      const ourStake = await stakingPool.view("get_account_total_balance",{account_id:CONTRACT_ID})
-      item.ourStake= BigInt(ourStake )
+      const ourStake = await stakingPool.view("get_account_total_balance", { account_id: CONTRACT_ID })
+      item.ourStake = BigInt(ourStake)
     }
-    catch(ex){
+    catch (ex) {
       //Validator is not a staking-pool contract
       console.log(item.name + " did not respond to get_account_total_balance")
       continue;
     }
 
-    const MAX_FEE=10
-    if (item.fee>MAX_FEE){
+    const MAX_FEE = 10
+    if (item.fee > MAX_FEE) {
       console.log(`${item.name} has a fee>${MAX_FEE}, ${item.fee}`)
       continue;
     }
@@ -425,77 +535,77 @@ async function list_validators(updateList:boolean) {
   const totalStake = BigInt(contractState.total_actually_staked);
 
   //use fee & order (stake) to determine points
-  let order=0;
-  let totalPoints = 0 
+  let order = 0;
+  let totalPoints = 0
   for (let item of newList) {
-    item.points = 1000-Number(item.stake*1000n/sumStakes) + 1000-(item.fee*100)
-    totalPoints+=item.points ;
-    if (item.ourStake) item.currentPct = Math.round(Number(item.ourStake/totalStake*10000n))/100;
+    item.points = 1000 - Number(item.stake * 1000n / sumStakes) + 1000 - (item.fee * 100)
+    totalPoints += item.points;
+    if (item.ourStake) item.currentPct = Math.round(Number(item.ourStake / totalStake * 10000n)) / 100;
     order++;
   }
 
   //use points to determine pct
-  let sum_bp=0;
+  let sum_bp = 0;
   for (let item of newList) {
-    item.bp = Math.round(item.points/totalPoints*10000);
-    sum_bp+=item.bp
+    item.bp = Math.round(item.points / totalPoints * 10000);
+    sum_bp += item.bp
   }
   //mak the sum 100%
-  let lastItem = newList[newList.length-1]
-  lastItem.bp = 10000-(sum_bp-(lastItem.bp||0));
+  let lastItem = newList[newList.length - 1]
+  lastItem.bp = 10000 - (sum_bp - (lastItem.bp || 0));
 
   console.log(newList);
 
   //check sum
-  sum_bp=0;
+  sum_bp = 0;
   for (let item of newList) {
-    sum_bp += item.bp||0
+    sum_bp += item.bp || 0
   }
-  if(sum_bp!=10000) throw Error("sum!=100%");
+  if (sum_bp != 10000) throw Error("sum!=100%");
 
   //end list construction
 
   if (updateList) {
 
-      //UPDATE contract list
-      console.log("-------------------")
-      console.log("-- UPDATING LIST --")
-      console.log("-------------------")
+    //UPDATE contract list
+    console.log("-------------------")
+    console.log("-- UPDATING LIST --")
+    console.log("-------------------")
 
-      getCredentials(OWNER_ACCOUNT);
-      metaPool.signer = credentials.account_id;
-      metaPool.signer_private_key = credentials.private_key;
+    getCredentials(OWNER_ACCOUNT);
+    metaPool.signer = credentials.account_id;
+    metaPool.signer_private_key = credentials.private_key;
 
-      const actual:Array<StakingPoolJSONInfo> = await metaPool.get_staking_pool_list();
-      for( let listed of newList){
-        if (listed.bp==undefined) continue;
+    const actual: Array<StakingPoolJSONInfo> = await metaPool.get_staking_pool_list();
+    for (let listed of newList) {
+      if (listed.bp == undefined) continue;
 
-        const foundSp = actual.find(e => e.account_id==listed.name);
-        if (!foundSp ) { //new one
-          console.log(`[new] ${listed.name}, ${listed.bp/100}%`)
-          await metaPool.set_staking_pool(listed.name,listed.bp)
+      const foundSp = actual.find(e => e.account_id == listed.name);
+      if (!foundSp) { //new one
+        console.log(`[new] ${listed.name}, ${listed.bp / 100}%`)
+        await metaPool.set_staking_pool(listed.name, listed.bp)
+      }
+      else { //found
+        if (foundSp.weight_basis_points != listed.bp) {
+          //update
+          console.log(`[${foundSp.inx}] change BP, ${foundSp.account_id}  ${foundSp.weight_basis_points / 100}% -> ${listed.bp / 100}%`)
+          await metaPool.set_staking_pool_weight(foundSp.inx, listed.bp);
         }
-        else { //found
-          if (foundSp.weight_basis_points!=listed.bp) {
-            //update
-            console.log(`[${foundSp.inx}] change BP, ${foundSp.account_id}  ${foundSp.weight_basis_points/100}% -> ${listed.bp/100}%`)
-            await metaPool.set_staking_pool_weight(foundSp.inx,listed.bp);
-          }
-          else {
-            console.log(`[${foundSp.inx}] no change ${foundSp.account_id}  ${foundSp.weight_basis_points/100}%`)
-          }
+        else {
+          console.log(`[${foundSp.inx}] no change ${foundSp.account_id}  ${foundSp.weight_basis_points / 100}%`)
         }
       }
+    }
 
-      //set bp=0 for the ones no longer validating or on the list
-      for(let sp of actual){
-        const foundListed = newList.find(e => e.name == sp.account_id);
-        if (!foundListed){
-            //not listed
-            console.log(`[${sp.inx}] not-listed so BP->0, ${sp.account_id}  ${sp.weight_basis_points/100}% -> 0%`)
-            await metaPool.set_staking_pool_weight(sp.inx,0);
-        }
+    //set bp=0 for the ones no longer validating or on the list
+    for (let sp of actual) {
+      const foundListed = newList.find(e => e.name == sp.account_id);
+      if (!foundListed) {
+        //not listed
+        console.log(`[${sp.inx}] not-listed so BP->0, ${sp.account_id}  ${sp.weight_basis_points / 100}% -> 0%`)
+        await metaPool.set_staking_pool_weight(sp.inx, 0);
       }
+    }
 
 
   }
@@ -503,7 +613,7 @@ async function list_validators(updateList:boolean) {
   //check sum of bp
   const check_bp = await metaPool.sum_staking_pool_list_weight_basis_points()
   console.log(`sum bp = ${check_bp}`)
-  if(check_bp!=10000) throw Error("sum bp expected to be 10000, but it is "+check_bp)
+  if (check_bp != 10000) throw Error("sum bp expected to be 10000, but it is " + check_bp)
 
 
 }
@@ -537,10 +647,11 @@ async function beat() {
     console.log(JSON.stringify(epoch));
   }
 
-  const contract_state = await metaPool.get_contract_state();
-  console.log(JSON.stringify(contract_state))
-  console.log("delta stake:",yton(contract_state.total_for_staking)-yton(contract_state.total_for_staking));
-  console.log("total_actually_unstaked_and_retrieved:",yton(contract_state.total_actually_unstaked_and_retrieved));
+  globalContractState = await metaPool.get_contract_state();
+  console.log("Epoch:", globalContractState.env_epoch_height);
+  console.log("delta stake:", yton(globalContractState.total_for_staking) - yton(globalContractState.total_actually_staked));
+  console.log("total_actually_unstaked_and_retrieved:", yton(globalContractState.total_actually_unstaked_and_retrieved));
+  showNumbers(globalContractState);
 
   // STAKE or UNSTAKE
   //if the epoch is ending, stake-unstake
@@ -582,7 +693,7 @@ async function beat() {
     let pools = await metaPool.get_staking_pool_list();
     for (let inx = 0; inx < pools.length; inx++) {
       const pool = pools[inx];
-      if ((near.yton(pool.staked) > 0 || near.yton(pool.unstaked) > 0) && pool.last_asked_rewards_epoch_height != contract_state.env_epoch_height) {
+      if ((near.yton(pool.staked) > 0 || near.yton(pool.unstaked) > 0) && pool.last_asked_rewards_epoch_height != globalContractState.env_epoch_height) {
         //ping on the pool so it calculates rewards
         console.log(`about to call PING & DISTRIBUTE on pool[${inx}]:${JSON.stringify(pool)}`)
         console.log(`pool.PING`)
@@ -606,28 +717,31 @@ async function beat() {
     // RETRIEVE UNSTAKED FUNDS
     for (let inx = 0; inx < pools.length; inx++) {
       const pool = pools[inx];
-      if (near.yton(pool.unstaked) > 0 && pool.unstaked_requested_epoch_height != "0"){
-          const now = BigInt(contract_state.env_epoch_height);
-          let when = BigInt(pool.unstaked_requested_epoch_height)+BigInt(NUM_EPOCHS_TO_UNLOCK);
-          if (when > now+30n)  when=now; //bad data or hard-fork
-          if (when<=now) {
-            //try RETRIEVE UNSTAKED FUNDS
-            console.log(`about to try RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
-            TotalCalls.retrieve++;
-            try {
-              let result = await metaPool.call("retrieve_funds_from_a_pool", { inx: inx });
-              if (result==undefined){
-                console.log(`RESULT is undefined`)  
-              }
-              else {
-                console.log(`RESULT:${yton(result)}N`)
-              }
+      if (near.yton(pool.unstaked) > 0 && pool.unstaked_requested_epoch_height != "0") {
+        const now = BigInt(globalContractState.env_epoch_height);
+        let when = BigInt(pool.unstaked_requested_epoch_height) + BigInt(NUM_EPOCHS_TO_UNLOCK);
+        if (when > now + 30n) when = now; //bad data or hard-fork
+        if (when <= now) {
+          //try RETRIEVE UNSTAKED FUNDS
+          console.log(`about to try RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
+          TotalCalls.retrieve++;
+          try {
+            console.log("first sync_unstaked_balance")
+            await metaPool.sync_unstaked_balance(inx);
+            //now retrieve unstaked
+            let result = await metaPool.retrieve_funds_from_a_pool(inx);
+            if (result == undefined) {
+              console.log(`RESULT is undefined`)
             }
-            catch (ex) {
-              console.error(ex);
+            else {
+              console.log(`RESULT:${yton(result)}N`)
             }
-            await sleep(5 * SECONDS)
           }
+          catch (ex) {
+            console.error(ex);
+          }
+          await sleep(5 * SECONDS)
+        }
       }
     }
   }
@@ -668,7 +782,7 @@ async function heartLoop() {
 }
 
 
-function getCredentials(accountId:string){
+function getCredentials(accountId: string) {
   const homedir = os.homedir()
   const CREDENTIALS_FILE = path.join(homedir, ".near-credentials/default/" + accountId + ".json")
   try {
@@ -700,28 +814,38 @@ async function main() {
   await getGlobalInfo()
 
   //validate arguments
-  for (const arg of process.argv){
-    if (arg.endsWith("/node")||arg.endsWith("/main")||arg.endsWith(".js")||arg.endsWith(".exe")) {
+  for (const arg of process.argv) {
+    if (arg.endsWith("/node") || arg.endsWith("/main") || arg.endsWith("\\main") || arg.endsWith(".js") || arg.endsWith(".exe")) {
       continue;
     }
-    if (!["rebuild", "list", "update","test","sp"].includes(arg)) {
-        throw Error("invalid argument: " + arg);
-    }            
-}
-
-  //UTILITY MODE, rebuild stakes
-  if (process.argv.includes("rebuild")) {
-      await rebuild_stakes();
-      process.exit(1);
-  }
-  //UTILITY MODE, list
-  if (process.argv.includes("list")) {
-    if (process.argv.includes("sp")) {
-      await list_full_sp_info();
+    if (!["rebuild", "test", "list", "update", "sp", "users","check","fix"].includes(arg)) {
+      throw Error("invalid CLI arg: " + arg);
     }
-    else 
-    {
-      await list_validators( process.argv.includes("update") );
+  }
+
+  //UTILITY MODE, list sp|users|validators [rebuild|update]
+  if (process.argv.includes("list")) {
+
+    const contractState = await metaPool.get_contract_state();
+    console.log( "Estimated native balance ",BigInt(contractState.total_available)+BigInt(contractState.total_actually_unstaked_and_retrieved))
+    console.log( formatLargeNumbers( util.inspect(contractState)));
+
+    if (process.argv.includes("sp")) {
+      await list_full_sp_info(contractState, process.argv.includes("rebuild"));
+    }
+    else if (process.argv.includes("users")) {
+      await list_full_users_info(process.argv.includes("fix"));
+    }
+    else {
+      await list_validators(process.argv.includes("update"));
+    }
+    process.exit(1);
+  }
+
+  if (process.argv.includes("check")) {
+    for(let n=2;n<15;n++) {
+      console.log("calling sync_unstaked_balance",n)
+      await metaPool.sync_unstaked_balance(n);
     }
     process.exit(1);
   }
@@ -734,7 +858,7 @@ async function main() {
   server.start()
 
   globalPersistentData = loadJSON()
-  if (!globalPersistentData.beatCount) globalPersistentData.beatCount=0;
+  if (!globalPersistentData.beatCount) globalPersistentData.beatCount = 0;
 
   //start loop calling heartbeat 
   heartLoop();

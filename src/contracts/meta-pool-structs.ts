@@ -8,6 +8,10 @@ export type GetAccountInfoResult = {
     available: U128String,
     /// The amount of stNEAR owned (computed from the shares owned)
     stnear: U128String,
+    
+    /// The amount of $META owned (including pending rewards)
+    meta: U128String,
+
     /// The amount of rewards (rewards = total_staked - stnear_amount) and (total_owned = stnear + rewards)
     unstaked: U128String,
     /// The epoch height when the unstaked was requested
@@ -40,7 +44,7 @@ export type GetAccountInfoResult = {
     nslp_share_value: U128String,
     nslp_share_bp: number, //basis points u16,
 
-    meta: U128String,
+    stake_shares: U128String,
 }
 
 //JSON compatible struct returned from get_contract_state

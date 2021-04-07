@@ -159,9 +159,9 @@ export class MetaPool extends SmartContract {
         return this.call("rebuild_stake_from_pool_information",{sp_inx:sp_inx, staked:staked, unstaked:unstaked})
     }
     //--FIXES
-    rebuild_contract_information(total_actually_staked:U128String, total_unstaked_and_waiting:U128String) : Promise<void> {
-        console.log("rebuild_contract_information",JSON.stringify({total_actually_staked:total_actually_staked, total_unstaked_and_waiting:total_unstaked_and_waiting}));
-        return this.call("rebuild_contract_information",{total_actually_staked:total_actually_staked, total_unstaked_and_waiting:total_unstaked_and_waiting})
+    rebuild_contract_staked(total_actually_staked:U128String, total_unstaked_and_waiting:U128String) : Promise<void> {
+        console.log("rebuild_contract_staked",JSON.stringify({total_actually_staked:total_actually_staked, total_unstaked_and_waiting:total_unstaked_and_waiting}));
+        return this.call("rebuild_contract_staked",{total_actually_staked:total_actually_staked, total_unstaked_and_waiting:total_unstaked_and_waiting})
     }
     //--FIXES
     stake_available(account_id:string){

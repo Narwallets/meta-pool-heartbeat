@@ -1,11 +1,10 @@
 // -----------
 // Module Init
 // -----------
-//Barebones minimal node web server
+//Bare bones minimal node web server
 // internal use only to:
 // * show stats from the meta-pool-heartbeat
 // * respond with "pong" to watchdog's "ping"
-// * accept shutdown command
 
 //Dependencies
 //------------
@@ -48,7 +47,7 @@ export class BareWebServer {
         //default port = 80
         this.port = port || 80;
 
-        //dynamyc content handler (application)
+        //dynamic content handler (application)
         this.appHandler = aAppHandler;
 
         //static files content handler
@@ -134,7 +133,7 @@ export class BareWebServer {
         const fullPath = this.findPathAndFilename(filename)
         if (!fullPath) throw Error(filename+" NOT FOUND");
         // add headers
-        //writeHeadersFor(path.extname(fullpath), resp);
+        //writeHeadersFor(path.extname(fullPath), resp);
 
         var content = fs.readFileSync(fullPath);
 

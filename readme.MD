@@ -14,7 +14,7 @@ This server also exposes an HTTP endpoint (default port 7001) to:
 * show server stats 
 * show server log
 * keep-alive response for the process watchdog
-* shutdown the process (will be restarted by pm2)
+
 
 
 ## Testnet Deployment Instructions

@@ -250,6 +250,12 @@ function getLogsAndErrorsFromReceipts(txResult: any) {
 }
 
 //-------------------------------
+export function sendYoctos(sender: string, receiver: string, amountYoctos: string, privateKey: string): Promise<any> {
+    const actions = [TX.transfer(new BN(amountYoctos))]
+    return broadcast_tx_commit_actions(actions, sender, receiver, privateKey)
+}
+
+//-------------------------------
 export function send(sender: string, receiver: string, amountNear: number, privateKey: string): Promise<any> {
     if (isNaN(amountNear) || amountNear <= 0) throw Error("invalid amount")
     const actions = [TX.transfer(new BN(ntoy(amountNear)))]

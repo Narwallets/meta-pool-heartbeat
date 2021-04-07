@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 
-const TAIL_SIZE = 8 * 1024;
+const TAIL_SIZE = 64 * 1024;
 // read the last TAIL_SIZE bytes from a file
 // return as string
 export function tail(filename: string): string {

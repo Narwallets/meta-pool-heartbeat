@@ -17,6 +17,7 @@ import { loadJSON, saveJSON } from './util/save-load-JSON.js';
 import { SmartContract } from './contracts/base-smart-contract.js';
 import { ContractState, StakingPoolJSONInfo } from './contracts/meta-pool-structs.js';
 import { formatLargeNumbers } from './util/format-near.js';
+import { ytonFull } from './near-api/utils/json-rpc.js';
 
 //time in ms
 const SECONDS = 1000
@@ -82,10 +83,6 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
       resp.setHeader("Access-Control-Allow-Origin", "*")
       resp.end(JSON.stringify(epoch));
     }
-    // else if (urlParts.pathname === '/shutdown') {
-    //   resp.end("shutdown");
-    //   process.exit(1);
-    // }
     else {
       //--------------
       //HTML RESPONSE
@@ -178,7 +175,7 @@ let server: BareWebServer;
 
 let metaPool: MetaPool;
 
-let chainStatus: any;
+//let chainStatus: any;
 //let genesisConfig: any;
 let epoch: EpochInfo;
 let globalContractState:ContractState;
@@ -266,8 +263,8 @@ async function getGlobalInfo() {
 
   //genesisConfig = await near.getGenesisConfig();
   //console.log(util.inspect(genesisConfig)); //epoch_length, num_blocks_per_year
-
   await computeCurrentEpoch();
+  globalContractState = await metaPool.get_contract_state();
 }
 
 async function computeCurrentEpoch() {
@@ -321,12 +318,12 @@ async function list_full_sp_info(contractData: ContractState,  rebuild:boolean) 
   let our_sums= {
     sum_staked: 0n,
     sum_unstaked: 0n,
-    both: 0n,
+    total_in_pools: 0n,
   }
   let sp_sums= {
     sp_sum_staked: 0n,
     sp_sum_unstaked: 0n,
-    both: 0n,
+    total_in_pools: 0n,
   }
 
   let pools = await metaPool.get_staking_pool_list();
@@ -356,26 +353,35 @@ async function list_full_sp_info(contractData: ContractState,  rebuild:boolean) 
     }
   }
   console.log("-- sp sums ------------------")
-  sp_sums.both = sp_sums.sp_sum_staked + sp_sums.sp_sum_unstaked;
+  sp_sums.total_in_pools = sp_sums.sp_sum_staked + sp_sums.sp_sum_unstaked;
   showNumbers(sp_sums);
 
   console.log("-- our sums ------------------")
-  our_sums.both = our_sums.sum_staked + our_sums.sum_unstaked;
+  our_sums.total_in_pools = our_sums.sum_staked + our_sums.sum_unstaked;
   showNumbers( our_sums );
+
+  console.log("---CHECK")
+  showCompareValues("total-in-pools",sp_sums.total_in_pools, our_sums.total_in_pools)
+  showCompareValues("our sums unstaked_and_waiting",our_sums.sum_unstaked, BigInt(globalContractState.total_unstaked_and_waiting))
 
   if (rebuild){
     if ( sp_sums.sp_sum_staked.toString() != contractData.total_actually_staked  || sp_sums.sp_sum_unstaked.toString() != contractData.total_unstaked_and_waiting ){
       console.log("-- ** REBUILD sum data")
-      await metaPool.rebuild_contract_information(sp_sums.sp_sum_staked.toString(), sp_sums.sp_sum_unstaked.toString());
+      await metaPool.rebuild_contract_staked(sp_sums.sp_sum_staked.toString(), sp_sums.sp_sum_unstaked.toString());
       console.log("-- ** ------------")
     }
   } 
 }
 
+function showCompareValues(title:string, sum:bigint, contract:bigint){
+  let line = `${sum!=contract? "ERR":"OK "} ${title.padEnd(20)}: sum:${sum}, contract:${contract}`
+  console.log(formatLargeNumbers(line))
+}
+
 //
 // UTILITY: list full users info
 //
-async function list_full_users_info(fix:boolean) {
+async function list_full_users_info(contractState: ContractState, fix:boolean) {
 
   try {
     let userCount = Number(await metaPool.get_number_of_accounts());
@@ -383,7 +389,7 @@ async function list_full_users_info(fix:boolean) {
 
     let stakingPool = new SmartContract("", OPERATOR_ACCOUNT, credentials.private_key)
 
-    let sums={
+    let peopleSums={
       available: 0n,
       unstaked: 0n,
       unstaked_can_withdraw : 0n,
@@ -391,7 +397,7 @@ async function list_full_users_info(fix:boolean) {
       stnear: 0n,
     }
 
-    const BATCH=10
+    const BATCH=50
     let start = 0
     while (start < userCount) {
       let accounts = await metaPool.get_accounts_info(start, BATCH);
@@ -412,7 +418,7 @@ async function list_full_users_info(fix:boolean) {
 
         let show=false;
         if (accountInfo.can_withdraw && accountInfo.unstaked!="0") {
-          sums.unstaked_can_withdraw += BigInt(accountInfo.unstaked)
+          peopleSums.unstaked_can_withdraw += BigInt(accountInfo.unstaked)
           show=true;
         }
         if (accountInfo.available!="0") {
@@ -421,15 +427,43 @@ async function list_full_users_info(fix:boolean) {
         
         if (show) showNumbers(accountInfo);
 
-        sums.available += BigInt(accountInfo.available)
-        sums.unstaked+= BigInt(accountInfo.unstaked)
-        sums.stake_shares += BigInt(accountInfo.stake_shares )
-        sums.stnear+= BigInt(accountInfo.stnear)
+        peopleSums.available += BigInt(accountInfo.available)
+        peopleSums.unstaked+= BigInt(accountInfo.unstaked)
+        peopleSums.stake_shares += BigInt(accountInfo.stake_shares )
+        peopleSums.stnear+= BigInt(accountInfo.stnear)
       }
       start += BATCH
     }
+    const account = await near.queryAccount(CONTRACT_ID)
+    const nativeBalance  = BigInt(account.amount)
+    console.log("---ACCOUNT native balance:")
+    console.log(yton(account.amount));
+    console.log("---CONTRACT")
+    showNumbers(contractState);
     console.log("---SUMS")
-    showNumbers(sums);
+    showNumbers(peopleSums);
+    console.log("---CHECK ACCOUNTS")
+    showCompareValues("Available",peopleSums.available, BigInt(contractState.total_available))
+    showCompareValues("stake shares",peopleSums.stake_shares, BigInt(contractState.total_stake_shares))
+    showCompareValues("unstaked",peopleSums.unstaked, BigInt(contractState.total_actually_unstaked_and_retrieved)+BigInt(contractState.total_unstaked_and_waiting))
+    console.log("--- contractState.total_actually_unstaked_and_retrieved should be:", peopleSums.unstaked - BigInt(contractState.total_unstaked_and_waiting))
+    console.log("----")
+    const deltaStake = BigInt(contractState.total_for_staking) - BigInt(contractState.total_actually_staked)
+    console.log(" deltaStake:",yton(deltaStake.toString()))
+    // what people have + delta-stake + what they have unstaked - what's in the pools unstaked
+    const shouldBeByAccounts = peopleSums.available + deltaStake + peopleSums.unstaked - BigInt(contractState.total_unstaked_and_waiting)
+    console.log(` nat bal should be (to cover accounts available & unstaked): liq ${yton(contractState.total_available)} + delta + accounts.unstaked ${yton(peopleSums.unstaked.toString())} - unstaked-in-the-pools ${yton(contractState.total_unstaked_and_waiting)}: ${yton(shouldBeByAccounts.toString())}`)
+    const differAcc = nativeBalance - shouldBeByAccounts
+    console.log("DIFFER by accounts (30% txn fee?):",ytonFull(differAcc.toString())) 
+    console.log("----")
+    // what the contract has + delta-stake + how much we retrieved from the pools
+    const shouldBeByContract = BigInt(contractState.total_available) + deltaStake + BigInt(contractState.total_actually_unstaked_and_retrieved) 
+    console.log(` nat bal should be (contract.unstaked_and_retrieved): liq ${yton(contractState.total_available)} + delta + unstaked_and_retrieved ${yton(contractState.total_actually_unstaked_and_retrieved)} - unstaked-in-the-pools ${yton(contractState.total_unstaked_and_waiting)}: ${yton(shouldBeByContract.toString())}`)
+    const differByContract = nativeBalance - shouldBeByContract
+    console.log("DIFFER by contract (30% txn fee?):",ytonFull(differByContract.toString()))
+
+    showCompareValues("differs",differAcc , differByContract )
+
   }
   catch (ex) {
     console.error(ex);
@@ -647,7 +681,9 @@ async function beat() {
     console.log(JSON.stringify(epoch));
   }
 
+  //refresh contract state
   globalContractState = await metaPool.get_contract_state();
+
   console.log("Epoch:", globalContractState.env_epoch_height);
   console.log("delta stake:", yton(globalContractState.total_for_staking) - yton(globalContractState.total_actually_staked));
   console.log("total_actually_unstaked_and_retrieved:", yton(globalContractState.total_actually_unstaked_and_retrieved));
@@ -688,13 +724,16 @@ async function beat() {
   }
 
   // COMPUTE REWARDS
-  //if the epoch is recently started -- ping the pools so they compute rewards and do the same in the meta-pool
-  if ((epoch.hours_from_start() > 0.5 && epoch.hours_from_start() < 1.5) || debugMode) {
-    let pools = await metaPool.get_staking_pool_list();
-    for (let inx = 0; inx < pools.length; inx++) {
-      const pool = pools[inx];
-      if ((near.yton(pool.staked) > 0 || near.yton(pool.unstaked) > 0) && pool.last_asked_rewards_epoch_height != globalContractState.env_epoch_height) {
-        //ping on the pool so it calculates rewards
+  // get all the pools
+  let pools = await metaPool.get_staking_pool_list();
+  //for each pool, ping and compute rewards
+  for (let inx = 0; inx < pools.length; inx++) {
+    const pool = pools[inx];
+
+    if ((near.yton(pool.staked) > 0 || near.yton(pool.unstaked) > 0) && pool.last_asked_rewards_epoch_height != globalContractState.env_epoch_height) {
+      //if the epoch is recently started -- ping the pools so they compute rewards and do the same in the meta-pool
+      if ((epoch.hours_from_start() > 0.25 && epoch.hours_from_start() < 5.5) || debugMode) {
+          //ping on the pool so it calculates rewards
         console.log(`about to call PING & DISTRIBUTE on pool[${inx}]:${JSON.stringify(pool)}`)
         console.log(`pool.PING`)
         TotalCalls.ping++;
@@ -713,35 +752,36 @@ async function beat() {
         await sleep(5 * SECONDS)
       }
     }
+  }
 
-    // RETRIEVE UNSTAKED FUNDS
-    for (let inx = 0; inx < pools.length; inx++) {
-      const pool = pools[inx];
-      if (near.yton(pool.unstaked) > 0 && pool.unstaked_requested_epoch_height != "0") {
-        const now = BigInt(globalContractState.env_epoch_height);
-        let when = BigInt(pool.unstaked_requested_epoch_height) + BigInt(NUM_EPOCHS_TO_UNLOCK);
-        if (when > now + 30n) when = now; //bad data or hard-fork
-        if (when <= now) {
-          //try RETRIEVE UNSTAKED FUNDS
-          console.log(`about to try RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
-          TotalCalls.retrieve++;
-          try {
-            console.log("first sync_unstaked_balance")
-            await metaPool.sync_unstaked_balance(inx);
-            //now retrieve unstaked
-            let result = await metaPool.retrieve_funds_from_a_pool(inx);
-            if (result == undefined) {
-              console.log(`RESULT is undefined`)
-            }
-            else {
-              console.log(`RESULT:${yton(result)}N`)
-            }
+  //for each pool 
+  // RETRIEVE UNSTAKED FUNDS
+  for (let inx = 0; inx < pools.length; inx++) {
+    const pool = pools[inx];
+    if (near.yton(pool.unstaked) > 0 && pool.unstaked_requested_epoch_height != "0") {
+      const now = BigInt(globalContractState.env_epoch_height);
+      let when = BigInt(pool.unstaked_requested_epoch_height) + BigInt(NUM_EPOCHS_TO_UNLOCK);
+      if (when > now + 30n) when = now; //bad data or hard-fork
+      if (when <= now) {
+        //try RETRIEVE UNSTAKED FUNDS
+        console.log(`about to try RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
+        TotalCalls.retrieve++;
+        try {
+          console.log("first sync_unstaked_balance")
+          await metaPool.sync_unstaked_balance(inx);
+          //now retrieve unstaked
+          let result = await metaPool.retrieve_funds_from_a_pool(inx);
+          if (result == undefined) {
+            console.log(`RESULT is undefined`)
           }
-          catch (ex) {
-            console.error(ex);
+          else {
+            console.log(`RESULT:${yton(result)}N`)
           }
-          await sleep(5 * SECONDS)
         }
+        catch (ex) {
+          console.error(ex);
+        }
+        await sleep(5 * SECONDS)
       }
     }
   }
@@ -818,7 +858,9 @@ async function main() {
     if (arg.endsWith("/node") || arg.endsWith("/main") || arg.endsWith("\\main") || arg.endsWith(".js") || arg.endsWith(".exe")) {
       continue;
     }
-    if (!["rebuild", "test", "list", "update", "sp", "users","check","fix"].includes(arg)) {
+    if (!["rebuild", "test", "list", "update", "sp", "users","check","fix",
+        "sync_unstaked","account","send-fix","rebuild_contract_available",
+        "pause","un_pause"].includes(arg)) {
       throw Error("invalid CLI arg: " + arg);
     }
   }
@@ -834,7 +876,7 @@ async function main() {
       await list_full_sp_info(contractState, process.argv.includes("rebuild"));
     }
     else if (process.argv.includes("users")) {
-      await list_full_users_info(process.argv.includes("fix"));
+      await list_full_users_info(contractState, process.argv.includes("fix"));
     }
     else {
       await list_validators(process.argv.includes("update"));
@@ -842,14 +884,43 @@ async function main() {
     process.exit(1);
   }
 
-  if (process.argv.includes("check")) {
-    for(let n=2;n<15;n++) {
-      console.log("calling sync_unstaked_balance",n)
-      await metaPool.sync_unstaked_balance(n);
+  if (process.argv.includes("sync_unstaked")) {
+    for (let inx = 0; inx < globalContractState.staking_pools_count; inx++) {
+      console.log("calling sync_unstaked_balance", inx )
+      await metaPool.sync_unstaked_balance(inx);
     }
     process.exit(1);
   }
 
+  if (process.argv.includes("account")) {
+    let account = await near.queryAccount(CONTRACT_ID)
+    showNumbers(account);
+    process.exit(1);
+  }
+
+  //--FIXES
+  if (process.argv.includes("send-fix")) {
+    await near.sendYoctos(credentials.account_id,CONTRACT_ID,"577291330446444041137771272",credentials.private_key);
+    process.exit(1);
+  }
+
+  if (process.argv.includes("rebuild_contract_available")) {
+    await near.call(CONTRACT_ID,"rebuild_contract_available",{
+      total_available: globalContractState.total_available,
+      total_actually_unstaked_and_retrieved: "367212239999999999999999861"
+      }, credentials.account_id, credentials.private_key, 5);
+    process.exit(1);
+  }
+  
+  if (process.argv.includes("pause")) {
+    await near.call(CONTRACT_ID,"pause_staking",{}, credentials.account_id, credentials.private_key, 5);
+    process.exit(1);
+  }
+  if (process.argv.includes("un_pause")) {
+    await near.call(CONTRACT_ID,"un_pause_staking",{}, credentials.account_id, credentials.private_key, 5);
+    process.exit(1);
+  }
+  
   //Start Web Server
   //-----------------
   //We start a bare-bones minimal web server to monitor meta-pool-heartbeat stats

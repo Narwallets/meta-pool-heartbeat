@@ -309,14 +309,14 @@ async function beat() {
   //refresh contract state
   globalContractState = await metaPool.get_contract_state();
 
-  console.log("Epoch:", globalContractState.env_epoch_height);
+  console.log("Epoch:", globalContractState.env_epoch_height, " hs.from start:", asHM(epoch.hours_from_start()), " hs.to end:", asHM(epoch.hours_to_end()));
   console.log("delta stake:", yton(globalContractState.total_for_staking) - yton(globalContractState.total_actually_staked));
   console.log("total_actually_unstaked_and_retrieved:", yton(globalContractState.total_actually_unstaked_and_retrieved));
   console.log(JSON.stringify(globalContractState));
 
   // STAKE or UNSTAKE
   //if the epoch is ending, stake-unstake
-  if (epoch.hours_to_end() < 0.5 || debugMode) {
+  if (epoch.hours_to_end() < 0.75 || debugMode) {
     //epoch about to end
     //loop staking
     for (let i = 0; i < 50; i++) {

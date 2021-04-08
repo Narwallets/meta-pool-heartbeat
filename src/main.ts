@@ -24,7 +24,7 @@ const SECONDS = 1000
 const MINUTES = 60 * SECONDS
 const HOURS = 60 * MINUTES
 
-const NUM_EPOCHS_TO_UNLOCK = 4
+const NUM_EPOCHS_TO_UNLOCK = 4n
 
 const MONITORING_PORT = 7000
 
@@ -34,6 +34,8 @@ network.setCurrent(prodMode ? "mainnet" : "testnet")
 const CONTRACT_ID = prodMode ? "meta.pool.near" : "meta.pool.testnet"
 const OPERATOR_ACCOUNT = "operator." + CONTRACT_ID;
 const OWNER_ACCOUNT = "lucio." + network.current;
+
+const TEN_TGAS = 10000000000000n;
 
 const StarDateTime = new Date()
 let TotalCalls = {
@@ -381,11 +383,12 @@ async function beat() {
   // RETRIEVE UNSTAKED FUNDS
   for (let inx = 0; inx < pools.length; inx++) {
     const pool = pools[inx];
-    if (near.yton(pool.unstaked) > 0 && pool.unstaked_requested_epoch_height != "0") {
+    //only the the amount unstaked justified tx-cost, only if amount > 10Tgas
+    if (BigInt(pool.unstaked) > TEN_TGAS && pool.unstaked_requested_epoch_height != "0") {
       const now = BigInt(globalContractState.env_epoch_height);
-      let when = BigInt(pool.unstaked_requested_epoch_height) + BigInt(NUM_EPOCHS_TO_UNLOCK);
-      if (when > now + 30n) when = now; //bad data or hard-fork
-      if (when <= now) {
+      let whenRequested = BigInt(pool.unstaked_requested_epoch_height);
+      if (whenRequested>now) whenRequested = 0n; //it was bad data or there was a hard-fork
+      if (now >= whenRequested+NUM_EPOCHS_TO_UNLOCK) {
         //try RETRIEVE UNSTAKED FUNDS
         console.log(`about to try RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
         TotalCalls.retrieve++;

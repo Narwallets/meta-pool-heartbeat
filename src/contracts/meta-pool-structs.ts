@@ -51,6 +51,8 @@ export type GetAccountInfoResult = {
 export type ContractState = {
 
     env_epoch_height: U64String,
+    contract_account_balance: U128String,
+    
     /// This amount increments with deposits and decrements with for_staking
     /// increments with complete_unstake and decrements with user withdrawals from the contract
     /// withdrawals from the pools can include rewards

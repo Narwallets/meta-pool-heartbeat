@@ -19,6 +19,8 @@ import { ContractState, StakingPoolJSONInfo } from './contracts/meta-pool-struct
 import { formatLargeNumbers } from './util/format-near.js';
 import { ytonFull } from './near-api/utils/json-rpc.js';
 
+import {parseAndWriteState, saveStateLog, yton as ytonHtml} from './metapool-html-state.js'
+
 //time in ms
 const SECONDS = 1000
 const MINUTES = 60 * SECONDS
@@ -64,6 +66,130 @@ function asHM(durationHours: number) {
   return Math.trunc(durationHours) + "h " + Math.round((durationHours - Math.trunc(durationHours)) * 60) + "m"
 }
 
+//-------------
+function showStats(resp:http.ServerResponse){
+  const hoursFromStart = epoch.hours_from_start()
+  const hoursToEnd = epoch.hours_to_end()
+  const hoursFromStartPct = hoursFromStart / (epoch.duration_ms / HOURS) * 100;
+  resp.write(`
+    <table>
+      <tr><td>Server Started</td><td>${StarDateTime.toString()}</td></tr>    
+      <tr><td>Total Calls</td><td>${util.inspect(TotalCalls)}  Accum:${globalPersistentData.beatCount}</td></tr>    
+    </table>
+
+    <table>
+      <tr><td>Contract State Epoch</td><td>${globalContractState.env_epoch_height}<tr><td>
+      <tr><td>Prev epoch duration</td><td>${asHM(epoch.duration_ms / HOURS)}<tr><td>
+      <tr><td>Epoch start height </td><td>${epoch.start_block_height}<tr><td>
+      <tr><td>last_block_height</td><td>${globalLastBlock.header.height}<tr><td>
+      <tr><td>Epoch blocks elapsed </td><td>${globalLastBlock.header.height - epoch.start_block_height}<tr><td>
+      <tr><td>Epoch advance </td><td>${Math.round((globalLastBlock.header.height - epoch.start_block_height) / epoch.length * 100)}%<tr><td>
+      
+      <tr><td>Epoch started</td><td>${epoch.start_dtm.toString()} => ${asHM(hoursFromStart)} ago</td></tr>
+      <tr><td>Epoch ends</td><td>${epoch.ends_dtm.toString()} => in ${asHM(hoursToEnd)}<tr><td>
+    </table>
+
+    <div class="progress">
+      <div class="elapsed" style="width:${hoursFromStartPct}%">
+      ${asHM(hoursFromStart)}
+      </div>
+      <div class="remaining" style="width:${100 - hoursFromStartPct}%">
+      ${asHM(hoursToEnd)}
+      </div>
+    </div>
+    `);
+
+}
+
+var globalStep=0;
+//-------------------------
+function showContractState(resp:http.ServerResponse){
+
+  try {
+    const lines = fs.readFileSync('state.log', 'utf-8').split(/\r?\n/);
+    
+    resp.write(`<table>`);
+    resp.write(`
+      <tr>
+      <th colspan=5>Step</th>
+
+      <th colspan=3>LIQUID</th>
+
+      <th colspan=2>ORDERS</th>
+
+      <th colspan=4>STAKING</th>
+
+      <th colspan=2>control</th>
+
+      <th colspan=3>external</th>
+              
+      <tr>
+    `);
+    resp.write(`
+      <tr>
+      <th>epoch</th>
+      <th>Step</th>
+      <th>user</th>
+      <th>ACTION</th>
+      <th>amount</th>
+
+      <th>contract account balance</th>
+      <th>reserve for D-WITHDRAW</th>
+      <th>Total Available</th>
+
+      <th>epoch STK orders</th>
+      <th>epoch UNSTAKE orders</th>
+
+      <th>Accum TFS</th>
+      <th>Accum TAS</th>
+      <th>to-stake Delta</th>
+      <th>T.unstake.& waiting</th>
+
+      <th>Unstake Claims</th>	
+      <th>U.Claim avail sum</th>	
+      <th>staked in pools</th>	
+      <th>unstake in pools</th>	
+      <th>total in pool</th>
+              
+      <tr>
+    `);
+    
+    globalStep=0;
+
+    for(let inx=0;inx<lines.length;inx++){
+      let line = lines[inx];
+      if (line.startsWith('"{')) { //event
+        let jsonFriendly = line.slice(1,-1).replace(/\\/g,"");
+        let data:Record<string,any> = JSON.parse(jsonFriendly)
+        resp.write(`
+        <tr>
+        <td></td>
+        <td>${globalStep++}</td>
+        <td>${data.account||data.account_id||data.sp||"bot"}</td>
+        <td>${data.event}</td>
+        <td>${ytonHtml(data.amount)}</td>
+        <tr>
+        `)
+      }
+      else if (line.startsWith("--")) {
+        let code = line.slice(2,6)
+        switch(code){
+          case "PRE ": case "POST": case "DIFF": case "SAMP": {
+            parseAndWriteState(globalStep, code, line.slice(6), resp);
+            globalStep++;
+            break;
+          }
+        }
+      }
+    }  
+    
+    resp.write(`</table>`);
+
+  } catch (ex) {
+    resp.write("<pre>"+ex.message+"</pre>");
+  }
+}
+
 //------------------------------------------
 //Main HTTP-Request Handler - stats server
 //------------------------------------------
@@ -75,16 +201,21 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
   //urlParts.query: the result of nodejs [querystring.parse] (http://nodejs.org/api/querystring.html)
 
   try {
-    if (urlParts.pathname === '/favicon.ico') {
+    let pathname:string = urlParts.pathname||"/";
+    if (pathname === '/favicon.ico') {
       respond_error(404, "", resp)
     }
-    else if (urlParts.pathname === '/index.css') {
+    else if (pathname === '/index.css') {
       server.writeFileContents('index.css', resp);
     }
-    else if (urlParts.pathname === '/ping') {
+    else if (pathname.endsWith('.js')) {
+      resp.setHeader("content-type","application/javascript")
+      server.writeFileContents(pathname.slice(1), resp);
+    }
+    else if (pathname === '/ping') {
       resp.end("pong");
     }
-    else if (urlParts.pathname === '/epoch') {
+    else if (pathname === '/epoch') {
       resp.setHeader("Access-Control-Allow-Origin", "*")
       resp.end(JSON.stringify(epoch));
     }
@@ -103,42 +234,17 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
       server.writeFileContents('index2-center.html', resp);
 
       //GET / (root) adds stats
-      if (urlParts.pathname === '/') { //stats
+      if (pathname === '/') { //stats
+        showStats(resp);
+      }
 
-        const hoursFromStart = epoch.hours_from_start()
-        const hoursToEnd = epoch.hours_to_end()
-        const hoursFromStartPct = hoursFromStart / (epoch.duration_ms / HOURS) * 100;
-        resp.write(`
-          <table>
-            <tr><td>Server Started</td><td>${StarDateTime.toString()}</td></tr>    
-            <tr><td>Total Calls</td><td>${util.inspect(TotalCalls)}  Accum:${globalPersistentData.beatCount}</td></tr>    
-          </table>
-
-          <table>
-            <tr><td>Contract State Epoch</td><td>${globalContractState.env_epoch_height}<tr><td>
-            <tr><td>Prev epoch duration</td><td>${asHM(epoch.duration_ms / HOURS)}<tr><td>
-            <tr><td>Epoch start height </td><td>${epoch.start_block_height}<tr><td>
-            <tr><td>last_block_height</td><td>${globalLastBlock.header.height}<tr><td>
-            <tr><td>Epoch blocks elapsed </td><td>${globalLastBlock.header.height - epoch.start_block_height}<tr><td>
-            <tr><td>Epoch advance </td><td>${Math.round((globalLastBlock.header.height - epoch.start_block_height) / epoch.length * 100)}%<tr><td>
-            
-            <tr><td>Epoch started</td><td>${epoch.start_dtm.toString()} => ${asHM(hoursFromStart)} ago</td></tr>
-            <tr><td>Epoch ends</td><td>${epoch.ends_dtm.toString()} => in ${asHM(hoursToEnd)}<tr><td>
-          </table>
-
-          <div class="progress">
-            <div class="elapsed" style="width:${hoursFromStartPct}%">
-            ${asHM(hoursFromStart)}
-            </div>
-            <div class="remaining" style="width:${100 - hoursFromStartPct}%">
-            ${asHM(hoursToEnd)}
-            </div>
-          </div>
-          `);
+      //GET /state show contract state
+      else if (pathname === '/state') {
+        showContractState(resp);
       }
 
       //GET /log show process log
-      else if (urlParts.pathname === '/log') {
+      else if (pathname === '/log') {
         resp.write("<pre>");
         resp.write(tail("main.log"));
         resp.write("</pre>");
@@ -146,7 +252,7 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
       }
       else {
         // GET /yyy
-        resp.write(`<p>invalid path ${urlParts.pathname}</p>`);
+        resp.write(`<p>invalid path ${pathname}</p>`);
       }
 
       //close </html> response page
@@ -178,6 +284,7 @@ let server: BareWebServer;
 let metaPool: MetaPool;
 let epoch: EpochInfo;
 let globalContractState:ContractState;
+let globalPools:Array<StakingPoolJSONInfo>;
 let globalLastBlock: near.BlockInfo;
 //-------------------------------------
 
@@ -257,6 +364,18 @@ class EpochInfo {
   }
 }
 
+async function refreshContractState() {
+  
+  globalContractState = await metaPool.get_contract_state();
+
+  globalPools = await metaPool.get_staking_pool_list();
+
+  //--- contract state log
+  saveStateLog(globalContractState, globalPools);
+
+}
+
+
 //-----------------------
 //Get global info
 //-----------------------
@@ -265,7 +384,7 @@ async function getGlobalInfo() {
   //genesisConfig = await near.getGenesisConfig();
   //console.log(util.inspect(genesisConfig)); //epoch_length, num_blocks_per_year
   await computeCurrentEpoch();
-  globalContractState = await metaPool.get_contract_state();
+  await refreshContractState();
 }
 
 async function computeCurrentEpoch() {
@@ -310,7 +429,7 @@ async function beat() {
   }
 
   //refresh contract state
-  globalContractState = await metaPool.get_contract_state();
+  await refreshContractState();
 
   console.log("Epoch:", globalContractState.env_epoch_height, " hs.from start:", asHM(epoch.hours_from_start()), " hs.to end:", asHM(epoch.hours_to_end()));
   console.log("delta stake:", yton(globalContractState.total_for_staking) - yton(globalContractState.total_actually_staked));

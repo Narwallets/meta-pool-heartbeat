@@ -41,3 +41,31 @@ nav a {
 .remaining {
     background: #ffffc5;
 }
+
+table {
+    clear:both;
+    border-collapse: collapse;
+  }
+  
+  th, td {
+      padding: 4px;
+      text-align: right;
+      font-weight: 400;
+      border: 1px solid black;
+  }
+  
+  th {
+      text-align: center;
+  }
+  
+  tr.DIFF{
+      font-style: italic;
+      font-size: smaller;
+  }
+  tr.POST{
+      background: #0080002e;
+  }
+  tr.selected{
+      background: #c4b95d7a;
+  }
+  

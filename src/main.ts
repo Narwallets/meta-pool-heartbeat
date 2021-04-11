@@ -35,7 +35,10 @@ const CONTRACT_ID = prodMode ? "meta.pool.near" : "meta.pool.testnet"
 const OPERATOR_ACCOUNT = "operator." + CONTRACT_ID;
 const OWNER_ACCOUNT = "lucio." + network.current;
 
-const TEN_TGAS = 10000000000000n;
+const ONE_NEAR = 10n**24n
+const TGAS = 10n**12n
+
+const TEN_TGAS = 10n*TGAS
 
 const StarDateTime = new Date()
 let TotalCalls = {
@@ -311,12 +314,12 @@ async function beat() {
 
   console.log("Epoch:", globalContractState.env_epoch_height, " hs.from start:", asHM(epoch.hours_from_start()), " hs.to end:", asHM(epoch.hours_to_end()));
   console.log("delta stake:", yton(globalContractState.total_for_staking) - yton(globalContractState.total_actually_staked));
-  console.log("total_actually_unstaked_and_retrieved:", yton(globalContractState.total_actually_unstaked_and_retrieved));
+  console.log("reserve_for_unstake_claims:", yton(globalContractState.reserve_for_unstake_claims));
   console.log(JSON.stringify(globalContractState));
 
   // STAKE or UNSTAKE
-  //if the epoch is ending, stake-unstake
-  if (epoch.hours_to_end() < 0.75 || debugMode) {
+  // *if the epoch is ending*, stake-unstake AND do end_of_epoch clearing
+  if (epoch.hours_to_end() <= 0.5 || debugMode) {
     //epoch about to end
     //loop staking
     for (let i = 0; i < 50; i++) {
@@ -346,19 +349,23 @@ async function beat() {
       }
       await sleep(5 * SECONDS)
     }
+    // END OF EPOCH stake/unstake ORDERS CLEARING => reserve for unstake claims
+    await metaPool.call("end_of_epoch_clearing", {}, 50);
   }
 
   // COMPUTE REWARDS
-  // get all the pools
-  let pools = await metaPool.get_staking_pool_list();
-  //for each pool, ping and compute rewards
-  for (let inx = 0; inx < pools.length; inx++) {
-    const pool = pools[inx];
+  if ((epoch.hours_from_start() > 0.25 && epoch.hours_to_end() > 1) || debugMode) {
 
-    if ((near.yton(pool.staked) > 0 || near.yton(pool.unstaked) > 0) && pool.last_asked_rewards_epoch_height != globalContractState.env_epoch_height) {
-      //if the epoch is recently started -- ping the pools so they compute rewards and do the same in the meta-pool
-      if ((epoch.hours_from_start() > 0.25 && epoch.hours_from_start() < 5.5) || debugMode) {
-          //ping on the pool so it calculates rewards
+    // get all the pools
+    let pools = await metaPool.get_staking_pool_list();
+
+    //for each pool, ping and compute rewards
+    for (let inx = 0; inx < pools.length; inx++) {
+      const pool = pools[inx];
+
+      if (BigInt(pool.staked) >= ONE_NEAR/100n && pool.last_asked_rewards_epoch_height != globalContractState.env_epoch_height) {
+        //if the epoch is recently started -- ping the pools so they compute rewards and do the same in the meta-pool
+        //ping on the pool so it calculates rewards
         console.log(`about to call PING & DISTRIBUTE on pool[${inx}]:${JSON.stringify(pool)}`)
         console.log(`pool.PING`)
         TotalCalls.ping++;
@@ -379,8 +386,10 @@ async function beat() {
     }
   }
 
-  //for each pool 
-  // RETRIEVE UNSTAKED FUNDS
+  // for each pool check if we must RETRIEVE UNSTAKED FUNDS
+  // that is if the unstake-wait-period has ended
+  // get all the pools
+  let pools = await metaPool.get_staking_pool_list();
   for (let inx = 0; inx < pools.length; inx++) {
     const pool = pools[inx];
     //only the the amount unstaked justified tx-cost, only if amount > 10Tgas

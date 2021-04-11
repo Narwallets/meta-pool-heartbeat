@@ -66,6 +66,14 @@ export type ContractState = {
     /// During distribute(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets staked in 100kN batches
     total_actually_staked: U128String, 
 
+    epoch_stake_orders: U128String, 
+    epoch_unstake_orders: U128String, 
+    
+    /// sum(accounts.unstake). Every time a user delayed-unstakes, this amount is incremented
+    /// when the funds are withdrawn the amount is decremented.
+    /// Control: total_unstaked_claims == reserve_for_unstaked_claims + total_unstaked_and_waiting
+    total_unstake_claims: U128String, 
+
     // how many "shares" were minted. Every time someone "stakes" he "buys pool shares" with the staked amount
     // the share price is computed so if he "sells" the shares on that moment he recovers the same near amount
     // staking produces rewards, so share_price = total_for_staking/total_shares
@@ -76,10 +84,15 @@ export type ContractState = {
     /// During distribute(), If !staking_paused && total_for_unstaking<total_actually_unstaked, then the difference gets unstaked in 100kN batches
     total_unstaked_and_waiting: U128String, 
 
-    /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
-    /// During distribute(), If sp.pending_withdrawal && sp.epoch_for_withdraw == env::epoch_height then all funds are retrieved from the sp
-    /// When the funds are actually withdraw by the users, total_actually_unstaked is decremented
-    total_actually_unstaked_and_retrieved: U128String, 
+    /// Every time a user performs a delayed-unstake, stNEAR tokens are burned and the user gets a unstaked_claim that will
+    /// be fulfilled 4 epochs from now. If there are someone else staking in the same epoch, both orders (stake & d-unstake) cancel each other
+    /// (no need to go to the staking-pools) but the NEAR received for staking must be now reserved for the unstake-withdraw 4 epochs form now. 
+    /// This amount increments *after* end_of_epoch_clearing, *if* there are staking & unstaking orders that cancel each-other.
+    /// This amount also increments at retrieve_from_staking_pool
+    /// The funds here are *reserved* fro the unstake-claims and can only be user to fulfill those claims
+    /// This amount decrements at unstake-withdraw, sending the NEAR to the user
+    /// Note: There's a extra functionality (quick-exit) that can speed-up unstaking claims if there's funds in this amount.
+    reserve_for_unstake_claims: U128String, 
 
     /// total meta minted
     total_meta : U128String,

@@ -72,7 +72,6 @@ export function addCommas(str:string) {
 export type State = {
     env_epoch_height:string;
     contract_account_balance:string;
-    reserve_for_withdraw: string;
     total_available: string;
     epoch_stake_orders: string;
     epoch_unstake_orders: string;
@@ -80,8 +79,8 @@ export type State = {
     total_actually_staked: string;
     to_stake_delta: string;
     total_unstaked_and_waiting: string;
-    unstake_claims: string;
-    unstake_claims_available_sum: string;
+    total_unstake_claims:string;
+    reserve_for_unstake_claims: string;
     staked_in_pools: string;
     unstaked_in_pools: string;
     total_in_pools: string;
@@ -99,7 +98,7 @@ export function parseAndWriteState(step:number, code:string, serdeJsonString:str
     <td></td>
   
     <td>${yton(data.contract_account_balance)}</td>
-    <td>${yton(data.reserve_for_withdraw)}</td>
+    <td>${yton(data.reserve_for_unstake_claims)}</td>
     <td>${yton(data.total_available)}</td>
   
     <td>${yton(data.epoch_stake_orders)}</td>
@@ -111,8 +110,8 @@ export function parseAndWriteState(step:number, code:string, serdeJsonString:str
     <td>${yton(data.to_stake_delta)}</td>
   
     <td>${yton(data.total_unstaked_and_waiting)}</td>
-    <td>${yton(data.unstake_claims)}</td>	
-    <td>${yton(data.unstake_claims_available_sum)}</td>	
+    <td>${yton(data.total_unstake_claims)}</td>	
+    <td>${yton(data.reserve_for_unstake_claims)}</td>	
     
     <td>${yton(data.staked_in_pools)}</td>	
     <td>${yton(data.unstaked_in_pools)}</td>	

@@ -72,22 +72,23 @@ function showStats(resp:http.ServerResponse){
   const hoursToEnd = epoch.hours_to_end()
   const hoursFromStartPct = hoursFromStart / (epoch.duration_ms / HOURS) * 100;
   resp.write(`
-    <table>
-      <tr><td>Server Started</td><td>${StarDateTime.toString()}</td></tr>    
-      <tr><td>Total Calls</td><td>${util.inspect(TotalCalls)}  Accum:${globalPersistentData.beatCount}</td></tr>    
-    </table>
+    <dl>
+      <dt>Server Started</dt><dd>${StarDateTime.toString()}</dd>
+      <dt>Total Calls</dt><dd>${util.inspect(TotalCalls)}</dd>
+      <dt>Accum</dt><dd>${globalPersistentData.beatCount}</dd>
+    </dl>
 
-    <table>
-      <tr><td>Contract State Epoch</td><td>${globalContractState.env_epoch_height}<tr><td>
-      <tr><td>Prev epoch duration</td><td>${asHM(epoch.duration_ms / HOURS)}<tr><td>
-      <tr><td>Epoch start height </td><td>${epoch.start_block_height}<tr><td>
-      <tr><td>last_block_height</td><td>${globalLastBlock.header.height}<tr><td>
-      <tr><td>Epoch blocks elapsed </td><td>${globalLastBlock.header.height - epoch.start_block_height}<tr><td>
-      <tr><td>Epoch advance </td><td>${Math.round((globalLastBlock.header.height - epoch.start_block_height) / epoch.length * 100)}%<tr><td>
+    <dl>
+      <dt>Contract State Epoch</dt><dd>${globalContractState.env_epoch_height}</dd>
+      <dt>Prev epoch duration</dt><dd>${asHM(epoch.duration_ms / HOURS)}</dd>
+      <dt>Epoch start height </dt><dd>${epoch.start_block_height}</dd>
+      <dt>last_block_height</dt><dd>${globalLastBlock.header.height}</dd>
+      <dt>Epoch blocks elapsed </dt><dd>${globalLastBlock.header.height - epoch.start_block_height}</dd>
+      <dt>Epoch advance</dt><dd>${Math.round((globalLastBlock.header.height - epoch.start_block_height) / epoch.length * 100)}%</dd>
       
-      <tr><td>Epoch started</td><td>${epoch.start_dtm.toString()} => ${asHM(hoursFromStart)} ago</td></tr>
-      <tr><td>Epoch ends</td><td>${epoch.ends_dtm.toString()} => in ${asHM(hoursToEnd)}<tr><td>
-    </table>
+      <dt>Epoch started</dt><dd>${epoch.start_dtm.toString()} => ${asHM(hoursFromStart)} ago</dd>
+      <dt>Epoch ends</dt><dd>${epoch.ends_dtm.toString()} => in ${asHM(hoursToEnd)}</dd>
+    </dl>
 
     <div class="progress">
       <div class="elapsed" style="width:${hoursFromStartPct}%">

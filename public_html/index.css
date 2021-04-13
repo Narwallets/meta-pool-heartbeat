@@ -14,8 +14,9 @@ body {
 
 nav {
     display: flex;
-    border-bottom: 1px solid gray;
     border-top: 1px solid gray;
+    border-bottom: 1px solid gray;
+    margin-bottom: 10px;
     padding: 4px;
     text-align: center;
 }
@@ -24,6 +25,17 @@ nav a {
     width: 400px;
 }
 
+dl {
+    display: grid;
+    grid-template-columns: 20% 80%;
+  }
+dt {
+    text-align: right;
+}
+dt,dd{ padding: 2px}
+dt::after{
+    content: ":";
+}
 .progress {
     border: 1px solid black;
     display: flex;

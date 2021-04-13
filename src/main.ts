@@ -19,7 +19,7 @@ import { ContractState, StakingPoolJSONInfo } from './contracts/meta-pool-struct
 import { formatLargeNumbers } from './util/format-near.js';
 import { ytonFull } from './near-api/utils/json-rpc.js';
 
-import {parseAndWriteState, saveStateLog, yton as ytonHtml} from './metapool-html-state.js'
+import {parseState, writeStateHTMLRow, saveStateLog, yton as ytonHtml} from './metapool-html-state.js'
 
 //time in ms
 const SECONDS = 1000
@@ -155,6 +155,7 @@ function showContractState(resp:http.ServerResponse){
     `);
     
     globalStep=0;
+    let prevStateString=""
 
     for(let inx=0;inx<lines.length;inx++){
       let line = lines[inx];
@@ -175,7 +176,12 @@ function showContractState(resp:http.ServerResponse){
         let code = line.slice(2,6)
         switch(code){
           case "PRE ": case "POST": case "DIFF": case "SAMP": {
-            parseAndWriteState(globalStep, code, line.slice(6), resp);
+            const state=parseState(line.slice(6))
+            const stateString = JSON.stringify(state);
+            if (stateString!==prevStateString) {
+              writeStateHTMLRow(globalStep, code, state, resp);
+              prevStateString = stateString;
+            }
             globalStep++;
             break;
           }

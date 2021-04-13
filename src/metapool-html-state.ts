@@ -87,9 +87,12 @@ export type State = {
     total_in_pools: string;
   }
   
-  //-----
-export function parseAndWriteState(step:number, code:string, serdeJsonString:string, resp:http.ServerResponse){
-    const data:State = jsonParseQuoteBigInt(serdeJsonString) as State;
+//-----
+export function parseState(serdeJsonString:string):State{
+  return jsonParseQuoteBigInt(serdeJsonString) as State;
+}
+
+export function writeStateHTMLRow(step:number, code:string, data:State, resp:http.ServerResponse){
     resp.write(`
     <tr class="${code.trim()}">
     <td>${data.env_epoch_height||""}</td>

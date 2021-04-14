@@ -9,7 +9,7 @@ type AdditionalStateInfo = {
     to_stake_delta: string;
 }
 
-type ExtraStateInfo = ContractState & AdditionalStateInfo;
+export type ExtendedState = ContractState & AdditionalStateInfo;
 
 export function saveStateLog(contractBasicState: ContractState, pools: Array<StakingPoolJSONInfo>) {
 
@@ -29,7 +29,7 @@ export function saveStateLog(contractBasicState: ContractState, pools: Array<Sta
     to_stake_delta: (BigInt(contractBasicState.total_for_staking) - BigInt(contractBasicState.total_actually_staked)).toString()
   }
 
-  let extraStateInfo:ExtraStateInfo = Object.assign(contractBasicState,additional);
+  let extraStateInfo:ExtendedState = Object.assign(contractBasicState,additional);
 
   fs.appendFile('state.log', "--SAMP " + JSON.stringify(extraStateInfo) + '\n', function (err) {
     if (err)

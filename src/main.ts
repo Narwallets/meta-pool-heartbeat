@@ -376,6 +376,23 @@ async function refreshContractState() {
 
 }
 
+/*TODO
+async function logStateDiff() {
+  
+  let prevExtendedState = Object.assign({},globalExtendedState);
+
+  globalContractState = await metaPool.get_contract_state();
+  globalPools = await metaPool.get_staking_pool_list();
+  globalExtendedState = composeExtendedState(globalContractState,globalPools)
+
+  let diff = computeStateDiff(prevExtendedState,globalExtendedState)
+  
+  //--- contract state log, DIFF & POST
+  saveStateLog("DIFF",diff);
+  saveStateLog("POST",globalExtendedState);
+
+}
+*/
 
 //-----------------------
 //Get global info
@@ -455,6 +472,7 @@ async function beat() {
       }
       await sleep(5 * SECONDS)
     }
+
     //loop unstaking 
     for (let i = 0; i < 50; i++) {
       console.log("CALL distribute_unstaking")

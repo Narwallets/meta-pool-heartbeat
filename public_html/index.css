@@ -54,9 +54,44 @@ dt::after{
     background: #ffffc5;
 }
 
-table {
-    clear:both;
-    border-collapse: collapse;
+.table-wrapper {
+    position:absolute;
+    top: 100px;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    overflow: auto;
+    font-size:10px;
+}
+
+
+table  {
+    border-spacing:0;
+  }
+
+  table  tbody tr td{
+    border-top-width:0;
+    border-right-width:0;
+  }
+
+  table thead{
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    }
+table thead:nth-child(1) th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fff;
+  border-right-width:0;
+}
+table thead tr:nth-child(2) th {
+    position: sticky;
+    top: 2em;
+    z-index: 9;
+    background: #fff;
+    border-right-width:0;
   }
   
   th, td {

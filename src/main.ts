@@ -34,7 +34,7 @@ const MONITORING_PORT = 7000
 const hostname = os.hostname()
 const prodMode = false
 network.setCurrent(prodMode ? "mainnet" : "testnet")
-const CONTRACT_ID = prodMode ? "meta.pool.near" : "meta.pool.testnet"
+const CONTRACT_ID = prodMode ? "meta.pool.near" : "meta-v2.pool.testnet"
 const OPERATOR_ACCOUNT = "operator." + CONTRACT_ID;
 const OWNER_ACCOUNT = "lucio." + network.current;
 

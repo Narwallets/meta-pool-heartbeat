@@ -1,4 +1,8 @@
 node_modules
 dist
+dist-v1
+dist-v2
+dist-v3
+dist-v4
 z-attic
 persistent.json

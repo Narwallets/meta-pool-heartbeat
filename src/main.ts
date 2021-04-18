@@ -29,7 +29,8 @@ const HOURS = 60 * MINUTES
 
 const NUM_EPOCHS_TO_UNLOCK = 4n
 
-const MONITORING_PORT = 7001
+const contract_version = 1
+const MONITORING_PORT = 7000 + contract_version
 
 const hostname = os.hostname()
 const prodMode = false
@@ -60,7 +61,7 @@ let globalPersistentData = new PersistentData()
 
 //------------------------------------------
 function showWho(resp: http.ServerResponse) {
-  resp.write(`<div class="top-info">Network:<b>${network.current}</b> - contract: <b>${CONTRACT_ID}</b></div>`)
+  resp.write(`<div class="top-info">Network:<b>${network.current}</b> - v${contract_version} - contract: <b>${CONTRACT_ID}</b></div>`)
 }
 
 function asHM(durationHours: number) {

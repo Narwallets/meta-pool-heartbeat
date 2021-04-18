@@ -294,6 +294,7 @@ export function appHandler(server: BareWebServer, urlParts: url.UrlWithParsedQue
 // GLOBAL VARS
 //--------------
 let debugMode = process.argv.includes("test");
+
 let credentials = { account_id: "", private_key: "" };
 let server: BareWebServer;
 let metaPool: MetaPool;
@@ -645,6 +646,7 @@ async function main() {
 
   //create contract proxy
   metaPool = new MetaPool(CONTRACT_ID, OPERATOR_ACCOUNT, credentials.private_key);
+  if (debugMode) metaPool.dryRun=true
 
   // get global info
   await getGlobalInfo()

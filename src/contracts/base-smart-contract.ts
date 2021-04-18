@@ -8,6 +8,8 @@ import {ntoy} from '../near-api/near-rpc.js';
 //-----------------------------
 export class SmartContract {
     
+    public dryRun:boolean=false;
+
     constructor(
         public contract_account: string,
         public signer: string,
@@ -17,7 +19,12 @@ export class SmartContract {
         return near.view(this.contract_account,method,args||{});
     }
     async call(method:string, args:Record<string,any>,TGas?:number,attachedYoctoNear?:string){
-        return near.call(this.contract_account,method,args,this.signer,this.signer_private_key,TGas||200,attachedYoctoNear||"0");
+        if (this.dryRun){
+            console.log(`near.call ${this.contract_account}.${method}(${args}) attached:${near.yton(attachedYoctoNear||"0")}`)
+        }
+        else {
+            return near.call(this.contract_account,method,args,this.signer,this.signer_private_key,TGas||200,attachedYoctoNear||"0");
+        }
     }
 
 }

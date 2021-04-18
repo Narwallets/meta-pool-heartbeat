@@ -62,7 +62,7 @@ export function writeStateHTMLRow(step:number, code:string, data:State, resp:htt
   
     <td>${yton(data.total_unstaked_and_waiting)}</td>
     <td>${yton(data.total_unstake_claims)}</td>	
-    <td>${yton(data.reserve_for_unstake_claims)}</td>	
+    <td>${yton((BigInt(data.reserve_for_unstake_claims)+BigInt(data.total_unstaked_and_waiting)).toString())}</td>	
     
     <td>${yton(data.staked_in_pools)}</td>	
     <td>${yton(data.unstaked_in_pools)}</td>	

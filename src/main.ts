@@ -559,7 +559,7 @@ async function beat() {
           console.log(`about to try RETRIEVE UNSTAKED FUNDS on pool[${inx}]:${JSON.stringify(pool)}`)
           TotalCalls.retrieve++;
           try {
-            console.log("first sync_unstaked_balance")
+            console.log("first sync unstaked balance")
             await metaPool.sync_unstaked_balance(inx);
             //now retrieve unstaked
             let result = await metaPool.retrieve_funds_from_a_pool(inx);

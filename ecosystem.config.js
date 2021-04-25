@@ -1,7 +1,7 @@
 module.exports = {
   apps : [{
     name: 'v1-meta-pool-heartbeat',
-    cwd: 'dist-v1',
+    cwd: 'dist',
     script: 'main.js',
     restart_delay: 1000,
     watch: 'main.js',

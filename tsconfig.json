@@ -12,7 +12,7 @@
     "module": "CommonJs",
     "target": "es2020",
     "rootDir": "src",
-    "outDir": "dist-v1",
+    "outDir": "dist",
     "moduleResolution": "node",
     "sourceMap": true,
     "strict": true,

@@ -29,7 +29,8 @@ const HOURS = 60 * MINUTES
 
 const NUM_EPOCHS_TO_UNLOCK = 4n
 
-const MONITORING_PORT = 7000
+const contract_version = 0 //0=current
+const MONITORING_PORT = 7000 + contract_version
 
 const hostname = os.hostname()
 const prodMode = false

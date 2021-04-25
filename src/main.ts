@@ -35,7 +35,7 @@ const hostname = os.hostname()
 const prodMode = false
 network.setCurrent(prodMode ? "mainnet" : "testnet")
 const CONTRACT_ID = prodMode ? "meta.pool.near" : "meta-v2.pool.testnet"
-const OPERATOR_ACCOUNT = "operator." + CONTRACT_ID;
+const OPERATOR_ACCOUNT = "operator.meta.pool." + network.current;
 const OWNER_ACCOUNT = "lucio." + network.current;
 
 const ONE_NEAR = 10n ** 24n
@@ -60,7 +60,7 @@ let globalPersistentData = new PersistentData()
 
 //------------------------------------------
 function showWho(resp: http.ServerResponse) {
-  resp.write(`<div class="top-info">Network:<b>${network.current}</b> - contract: <b>${CONTRACT_ID}</b></div>`)
+  resp.write(`<div class="top-info">Network:<b>${network.current}</b> - contract:<b>${CONTRACT_ID} - operator:<b>${OPERATOR_ACCOUNT}</b></div>`)
 }
 
 function asHM(durationHours: number) {

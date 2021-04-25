@@ -60,7 +60,7 @@ let globalPersistentData = new PersistentData()
 
 //------------------------------------------
 function showWho(resp: http.ServerResponse) {
-  resp.write(`<div class="top-info">Network:<b>${network.current}</b> - contract:<b>${CONTRACT_ID} - operator:<b>${OPERATOR_ACCOUNT}</b></div>`)
+  resp.write(`<div class="top-info">Network:<b>${network.current}</b> - contract:<b>${CONTRACT_ID}</b> - operator:<b>${OPERATOR_ACCOUNT}</b></div>`)
 }
 
 function asHM(durationHours: number) {

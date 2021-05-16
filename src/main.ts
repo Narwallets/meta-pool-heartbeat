@@ -512,7 +512,12 @@ async function beat() {
     }
 
     //END_OF_EPOCH Task 3:stake|unstake ORDERS CLEARING => reserve for unstake claims
-    await metaPool.call("end_of_epoch_clearing", {}, 50);
+    //refresh contract state
+    await refreshContractState();
+    console.log(`end of epoch: epoch_stake_orders:${yton(globalContractState.epoch_stake_orders)} epoch_unstake_orders:${yton(globalContractState.epoch_unstake_orders)}`);
+    if (globalContractState.epoch_stake_orders != "0" || globalContractState.epoch_unstake_orders != "0") {
+      await metaPool.call("end_of_epoch_clearing", {}, 50);
+    }
   }
 
   // MIDDLE_EPOCH: 
@@ -647,7 +652,7 @@ async function main() {
 
   //create contract proxy
   metaPool = new MetaPool(CONTRACT_ID, OPERATOR_ACCOUNT, credentials.private_key);
-  if (debugMode) metaPool.dryRun=true
+  if (debugMode) metaPool.dryRun = true
 
   // get global info
   await getGlobalInfo()

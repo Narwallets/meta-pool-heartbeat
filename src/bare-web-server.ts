@@ -131,7 +131,10 @@ export class BareWebServer {
     writeFileContents(filename:string, resp:http.ServerResponse, replaceData?:Record<string,any>) {
 
         const fullPath = this.findPathAndFilename(filename)
-        if (!fullPath) throw Error(filename+" NOT FOUND");
+        if (!fullPath) {
+            respond_error(404, `FNF:${filename}`, resp)
+            return
+        }
         // add headers
         //writeHeadersFor(path.extname(fullPath), resp);
 

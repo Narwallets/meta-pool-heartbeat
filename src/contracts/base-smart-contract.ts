@@ -21,7 +21,7 @@ export class SmartContract {
     }
     async call(method: string, args: Record<string, any>, TGas?: number, attachedYoctoNear?: string) {
         if (this.dryRun || this.logLevel > 0) {
-            console.log(`near.call ${this.contract_account}.${method}(${args}) attached:${near.yton(attachedYoctoNear || "0")}`)
+            console.log(`near.call ${this.contract_account}.${method}(${JSON.stringify(args)}) attached:${near.yton(attachedYoctoNear || "0")}`)
         }
         if (!this.dryRun) {
             return near.call(this.contract_account, method, args, this.signer, this.signer_private_key, TGas || 200, attachedYoctoNear || "0");
